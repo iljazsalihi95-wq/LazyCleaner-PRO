@@ -15,6 +15,7 @@ class MainActivity : Activity() {
  private val pickerCode = 101
  private val exportCode = 102
  private var lastReport = ""
+ private var latestScanFolder: Uri? = null
  private lateinit var result: TextView
  private lateinit var container: LinearLayout
  override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,6 +39,16 @@ class MainActivity : Activity() {
     type="text/plain"
     putExtra(Intent.EXTRA_TITLE,"LazyCleaner_Report.txt")
    },exportCode)
+  }
+  button("📂 Hap dosjen e fundit të skanuar") {
+   val folder=latestScanFolder
+   if(folder==null) Toast.makeText(this,"Së pari zgjidh një dosje",Toast.LENGTH_SHORT).show()
+   else try {
+    startActivity(Intent(Intent.ACTION_VIEW).apply {
+     setDataAndType(folder,DocumentsContract.Document.MIME_TYPE_DIR)
+     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    })
+   } catch (_:Exception) { Toast.makeText(this,"Hape dosjen nga Files",Toast.LENGTH_LONG).show() }
   }
   result=TextView(this).apply { setTextColor(Color.WHITE); textSize=15f; setPadding(0,20,0,12) }
   container.addView(result)
@@ -63,21 +74,25 @@ class MainActivity : Activity() {
   if(requestCode!=pickerCode) return
   val uri=data?.data ?: return
   try { contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_:Exception) {}
+  latestScanFolder=uri
   result.text="Duke skanuar..."
   Thread {
    val hashes=mutableMapOf<String,MutableList<String>>()
+   val fileSizes=mutableListOf<Pair<String,Long>>()
+   var scannedBytes=0L
    var total=0; var html=0; var screenshots=0; var failures=0
    val htmlFiles=mutableListOf<String>()
    fun scan(folder:Uri,depth:Int){
     if(depth>20 || total>20000) return
     val children=DocumentsContract.buildChildDocumentsUriUsingTree(folder,DocumentsContract.getDocumentId(folder))
-    val projection=arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID,DocumentsContract.Document.COLUMN_DISPLAY_NAME,DocumentsContract.Document.COLUMN_MIME_TYPE)
+    val projection=arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID,DocumentsContract.Document.COLUMN_DISPLAY_NAME,DocumentsContract.Document.COLUMN_MIME_TYPE,DocumentsContract.Document.COLUMN_SIZE)
     contentResolver.query(children,projection,null,null,null)?.use { cursor ->
      while(cursor.moveToNext() && total<=20000){
       val id=cursor.getString(0); val name=cursor.getString(1) ?: ""; val mime=cursor.getString(2)
       val child=DocumentsContract.buildDocumentUriUsingTree(folder,id)
+      val size=if(cursor.isNull(3)) 0L else cursor.getLong(3)
       if(mime==DocumentsContract.Document.MIME_TYPE_DIR){scan(child,depth+1);continue}
-      total++; if(name.endsWith(".html",true)) { html++; if(htmlFiles.size<100) htmlFiles.add(name) }
+      total++; scannedBytes+=size; if(fileSizes.size<20000) fileSizes.add(name to size); if(name.endsWith(".html",true)) { html++; if(htmlFiles.size<100) htmlFiles.add(name) }
       if(name.contains("screenshot",true)) screenshots++
       try {
        val md=MessageDigest.getInstance("SHA-256")
@@ -93,9 +108,10 @@ class MainActivity : Activity() {
    }
    try {scan(uri,0)} catch (_:Exception){failures++}
    val duplicates=hashes.values.filter{it.size>1}
-   val message="Skedarë: $total\nHTML: $html\nScreenshot: $screenshots\nGrupe identike: ${duplicates.size}\nGabime leximi: $failures\n\n"+
+   val largest=fileSizes.sortedByDescending { it.second }.take(15).joinToString("\\n") { "\${it.first}: \${it.second/1048576} MB" }
+   val message="Skedarë: $total\nHTML: $html\nScreenshot: $screenshots\nGrupe identike: ${duplicates.size}\nMadhësia e skanuar: ${scannedBytes/1048576} MB\nGabime leximi: $failures\n\n"+
     duplicates.take(25).joinToString("\n\n"){ "Duplikate:\n"+it.joinToString("\n") }+
-    "\n\nHTML të gjetura:\n"+htmlFiles.take(100).joinToString("\n")+"\n\nAsgjë nuk është fshirë."
+    "\n\n15 skedarët më të mëdhenj:\n"+largest+"\n\nHTML të gjetura:\n"+htmlFiles.take(100).joinToString("\n")+"\n\nAsgjë nuk është fshirë."
    runOnUiThread { lastReport=message; result.text=message }
   }.start()
  }
