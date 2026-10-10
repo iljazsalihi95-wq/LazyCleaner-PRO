@@ -50,6 +50,10 @@ class MainActivity : Activity() {
     })
    } catch (_:Exception) { Toast.makeText(this,"Hape dosjen nga Files",Toast.LENGTH_LONG).show() }
   }
+  button("🕘 Historiku i skanimeve") {
+   val history=getSharedPreferences("scan_history",MODE_PRIVATE).getString("recent","Nuk ka skanime të përfunduara.")
+   result.text=history
+  }
   result=TextView(this).apply { setTextColor(Color.WHITE); textSize=15f; setPadding(0,20,0,12) }
   container.addView(result)
   text("🛡️ HTML Project Guardian: skedarët index.html dhe versionet e ndryshme nuk fshihen automatikisht.")
@@ -112,7 +116,15 @@ class MainActivity : Activity() {
    val message="Skedarë: $total\nHTML: $html\nScreenshot: $screenshots\nGrupe identike: ${duplicates.size}\nMadhësia e skanuar: ${scannedBytes/1048576} MB\nGabime leximi: $failures\n\n"+
     duplicates.take(25).joinToString("\n\n"){ "Duplikate:\n"+it.joinToString("\n") }+
     "\n\n15 skedarët më të mëdhenj:\n"+largest+"\n\nHTML të gjetura:\n"+htmlFiles.take(100).joinToString("\n")+"\n\nAsgjë nuk është fshirë."
-   runOnUiThread { lastReport=message; result.text=message }
+   runOnUiThread {
+    lastReport=message
+    result.text=message
+    val prefs=getSharedPreferences("scan_history",MODE_PRIVATE)
+    val now=java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.getDefault()).format(java.util.Date())
+    val entry="$now — $total skedarë, $html HTML, ${duplicates.size} grupe duplikatesh"
+    val previous=prefs.getString("recent","") ?: ""
+    prefs.edit().putString("recent",(entry+"\\n"+previous).lines().take(20).joinToString("\\n")).apply()
+   }
   }.start()
  }
 }
