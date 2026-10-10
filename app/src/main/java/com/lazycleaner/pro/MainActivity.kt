@@ -149,13 +149,13 @@ class MainActivity : Activity() {
    var total=0; var html=0; var screenshots=0; var failures=0
    val htmlFiles=mutableListOf<String>()
    fun scan(folder:Uri,depth:Int){
-    if(depth>20 || total>20000) return
-    val children=DocumentsContract.buildChildDocumentsUriUsingTree(folder,DocumentsContract.getDocumentId(folder))
+    if(depth>20 || total>=20000) return
+    val children=DocumentsContract.buildChildDocumentsUriUsingTree(folder,if(depth==0) DocumentsContract.getTreeDocumentId(folder) else DocumentsContract.getDocumentId(folder))
     val projection=arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID,DocumentsContract.Document.COLUMN_DISPLAY_NAME,DocumentsContract.Document.COLUMN_MIME_TYPE,DocumentsContract.Document.COLUMN_SIZE)
     contentResolver.query(children,projection,null,null,null)?.use { cursor ->
-     while(cursor.moveToNext() && total<=20000){
+     while(cursor.moveToNext() && total<20000){
       val id=cursor.getString(0); val name=cursor.getString(1) ?: ""; val mime=cursor.getString(2)
-      val child=DocumentsContract.buildDocumentUriUsingTree(folder,id)
+      val child=DocumentsContract.buildDocumentUriUsingTree(uri,id)
       val size=if(cursor.isNull(3)) 0L else cursor.getLong(3)
       if(mime==DocumentsContract.Document.MIME_TYPE_DIR){scan(child,depth+1);continue}
       total++; scannedBytes+=size; if(fileSizes.size<20000) fileSizes.add(name to size); if(name.endsWith(".html",true)) { html++; if(htmlFiles.size<100) htmlFiles.add(name) }
