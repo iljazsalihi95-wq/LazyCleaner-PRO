@@ -175,18 +175,20 @@ class MainActivity : Activity() {
    try {scan(uri,0)} catch (_:Exception){failures++}
    val duplicates=hashes.values.filter{it.size>1}
    val candidates=duplicates.flatMap { it.drop(1) }
-   val largest=fileSizes.sortedByDescending { it.second }.take(15).joinToString("\\n") { "\${it.first}: \${it.second/1048576} MB" }
+   val largest=fileSizes.sortedByDescending { it.second }.take(15).joinToString("\n") { "${it.first}: ${it.second/1048576} MB" }
    val message="Skedarë: $total\nHTML: $html\nScreenshot: $screenshots\nGrupe identike: ${duplicates.size}\nMadhësia e skanuar: ${scannedBytes/1048576} MB\nGabime leximi: $failures\n\n"+
     duplicates.take(25).joinToString("\n\n"){ "Duplikate:\n"+it.joinToString("\n") { item -> item.second } }+
     "\n\n15 skedarët më të mëdhenj:\n"+largest+"\n\nHTML të gjetura:\n"+htmlFiles.take(100).joinToString("\n")+"\n\nAsgjë nuk është fshirë."
    runOnUiThread {
+    cleanupCandidates.clear()
+    cleanupCandidates.addAll(candidates)
     lastReport=message
     result.text=message
     val prefs=getSharedPreferences("scan_history",MODE_PRIVATE)
     val now=java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.getDefault()).format(java.util.Date())
     val entry="$now — $total skedarë, $html HTML, ${duplicates.size} grupe duplikatesh"
     val previous=prefs.getString("recent","") ?: ""
-    prefs.edit().putString("recent",(entry+"\\n"+previous).lines().take(20).joinToString("\\n")).apply()
+    prefs.edit().putString("recent",(entry+"\n"+previous).lines().take(20).joinToString("\n")).apply()
    }
   }.start()
  }
