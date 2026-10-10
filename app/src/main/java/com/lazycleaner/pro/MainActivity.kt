@@ -20,7 +20,9 @@ class MainActivity : Activity() {
   val root = ScrollView(this)
   container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(28,48,28,28); setBackgroundColor(Color.rgb(3,16,37)) }
   root.addView(container)
-  title("✦ LazyCleaner PRO")
+  title("♻ LazyCleaner PRO")
+  val logo=ImageView(this).apply { setImageResource(R.drawable.ic_lazycleaner); layoutParams=LinearLayout.LayoutParams(180,180) }
+  container.addView(logo)
   text("Smart Phone Manager • Skanim lokal, pa fshirje automatike")
   button("🔎 Zgjidh dosjen për skanim") {
    val i=Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
@@ -46,6 +48,7 @@ class MainActivity : Activity() {
   Thread {
    val hashes=mutableMapOf<String,MutableList<String>>()
    var total=0; var html=0; var screenshots=0; var failures=0
+   val htmlFiles=mutableListOf<String>()
    fun scan(folder:Uri,depth:Int){
     if(depth>20 || total>20000) return
     val children=DocumentsContract.buildChildDocumentsUriUsingTree(folder,DocumentsContract.getDocumentId(folder))
@@ -55,7 +58,7 @@ class MainActivity : Activity() {
       val id=cursor.getString(0); val name=cursor.getString(1) ?: ""; val mime=cursor.getString(2)
       val child=DocumentsContract.buildDocumentUriUsingTree(folder,id)
       if(mime==DocumentsContract.Document.MIME_TYPE_DIR){scan(child,depth+1);continue}
-      total++; if(name.endsWith(".html",true)) html++
+      total++; if(name.endsWith(".html",true)) { html++; if(htmlFiles.size<100) htmlFiles.add(name) }
       if(name.contains("screenshot",true)) screenshots++
       try {
        val md=MessageDigest.getInstance("SHA-256")
