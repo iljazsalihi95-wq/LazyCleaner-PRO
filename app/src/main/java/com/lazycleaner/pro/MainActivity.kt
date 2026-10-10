@@ -19,6 +19,7 @@ class MainActivity : Activity() {
  private val backupPickCode = 103
  private val backupSaveCode = 104
  private var backupSource: Uri? = null
+ private val cleanupCandidates=mutableListOf<Pair<Uri,String>>()
  private var lastReport = ""
  private var latestScanFolder: Uri? = null
  private lateinit var result: TextView
@@ -66,6 +67,10 @@ class MainActivity : Activity() {
      addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     })
    } catch (_:Exception) { Toast.makeText(this,"Hape dosjen nga Files",Toast.LENGTH_LONG).show() }
+  }
+  button("🧾 Kandidatët për pastrim (pa fshirje)") {
+   result.text=if(cleanupCandidates.isEmpty()) "Së pari skano një dosje. Nuk ka kandidatë të identifikuar."
+    else "Duplikate identike – shqyrto para çdo veprimi:\n"+cleanupCandidates.take(80).joinToString("\n") { "• "+it.second }+"\n\nAsnjë skedar nuk është fshirë."
   }
   button("🛡️ Smart Backup – kopjo një skedar") {
    val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -138,7 +143,7 @@ class MainActivity : Activity() {
   latestScanFolder=uri
   result.text="Duke skanuar..."
   Thread {
-   val hashes=mutableMapOf<String,MutableList<String>>()
+   val hashes=mutableMapOf<String,MutableList<Pair<Uri,String>>>()
    val fileSizes=mutableListOf<Pair<String,Long>>()
    var scannedBytes=0L
    var total=0; var html=0; var screenshots=0; var failures=0
@@ -161,7 +166,7 @@ class MainActivity : Activity() {
         val buf=ByteArray(32768)
         while(true){val n=input.read(buf);if(n<0)break;md.update(buf,0,n)}
         val digest=md.digest().joinToString(""){"%02x".format(it)}
-        hashes.getOrPut(digest){mutableListOf()}.add(name)
+        hashes.getOrPut(digest){mutableListOf()}.add(child to name)
        }
       } catch (_:Exception){failures++}
      }
@@ -169,9 +174,10 @@ class MainActivity : Activity() {
    }
    try {scan(uri,0)} catch (_:Exception){failures++}
    val duplicates=hashes.values.filter{it.size>1}
+   val candidates=duplicates.flatMap { it.drop(1) }
    val largest=fileSizes.sortedByDescending { it.second }.take(15).joinToString("\\n") { "\${it.first}: \${it.second/1048576} MB" }
    val message="Skedarë: $total\nHTML: $html\nScreenshot: $screenshots\nGrupe identike: ${duplicates.size}\nMadhësia e skanuar: ${scannedBytes/1048576} MB\nGabime leximi: $failures\n\n"+
-    duplicates.take(25).joinToString("\n\n"){ "Duplikate:\n"+it.joinToString("\n") }+
+    duplicates.take(25).joinToString("\n\n"){ "Duplikate:\n"+it.joinToString("\n") { item -> item.second } }+
     "\n\n15 skedarët më të mëdhenj:\n"+largest+"\n\nHTML të gjetura:\n"+htmlFiles.take(100).joinToString("\n")+"\n\nAsgjë nuk është fshirë."
    runOnUiThread {
     lastReport=message
