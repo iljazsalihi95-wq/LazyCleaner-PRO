@@ -70,7 +70,7 @@ class MainActivity : Activity() {
   }
   button("🧾 Kandidatët për pastrim (pa fshirje)") {
    result.text=if(cleanupCandidates.isEmpty()) "Së pari skano një dosje. Nuk ka kandidatë të identifikuar."
-    else "Duplikate identike – shqyrto para çdo veprimi:\n"+cleanupCandidates.take(80).joinToString("\n") { "• "+it.second }+"\n\nAsnjë skedar nuk është fshirë."
+    else "Duplikate identike (skedarët e projekteve janë përjashtuar) – shqyrto para çdo veprimi:\n"+cleanupCandidates.take(80).joinToString("\n") { "• "+it.second }+"\n\nAsnjë skedar nuk është fshirë."
   }
   button("🛡️ Smart Backup – kopjo një skedar") {
    val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -174,7 +174,7 @@ class MainActivity : Activity() {
    }
    try {scan(uri,0)} catch (_:Exception){failures++}
    val duplicates=hashes.values.filter{it.size>1}
-   val candidates=duplicates.flatMap { it.drop(1) }
+   val candidates=duplicates.flatMap { it.drop(1) }.filterNot { (_, name) -> name.endsWith(".html",true) || name.endsWith(".htm",true) || name.endsWith(".js",true) || name.endsWith(".gs",true) || name.endsWith(".json",true) }
    val largest=fileSizes.sortedByDescending { it.second }.take(15).joinToString("\n") { "${it.first}: ${it.second/1048576} MB" }
    val message="Skedarë: $total\nHTML: $html\nScreenshot: $screenshots\nGrupe identike: ${duplicates.size}\nMadhësia e skanuar: ${scannedBytes/1048576} MB\nGabime leximi: $failures\n\n"+
     duplicates.take(25).joinToString("\n\n"){ "Duplikate:\n"+it.joinToString("\n") { item -> item.second } }+
