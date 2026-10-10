@@ -39,7 +39,7 @@ class MainActivity : Activity() {
   text("📊 Hapësira e pajisjes: %.1f GB të lira nga %.1f GB".format(freeGb,totalGb))
   val bar=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {
    max=1000
-   progress=(((totalGb-freeGb)/totalGb)*1000).toInt().coerceIn(0,1000)
+   progress=if(totalGb>0) (((totalGb-freeGb)/totalGb)*1000).toInt().coerceIn(0,1000) else 0
    progressTintList=android.content.res.ColorStateList.valueOf(Color.CYAN)
   }
   container.addView(bar)
