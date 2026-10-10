@@ -2,6 +2,8 @@ package com.lazycleaner.pro
 
 import android.app.Activity
 import android.os.Bundle
+import android.os.Environment
+import android.os.StatFs
 import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -27,6 +29,18 @@ class MainActivity : Activity() {
   val logo=ImageView(this).apply { setImageResource(R.drawable.ic_lazycleaner); layoutParams=LinearLayout.LayoutParams(180,180) }
   container.addView(logo)
   text("Smart Phone Manager • Skanim lokal, pa fshirje automatike")
+  val stats=StatFs(Environment.getDataDirectory().absolutePath)
+  val totalGb=stats.totalBytes.toDouble()/1073741824.0
+  val freeGb=stats.availableBytes.toDouble()/1073741824.0
+  text("📊 Hapësira e pajisjes: %.1f GB të lira nga %.1f GB".format(freeGb,totalGb))
+  val bar=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {
+   max=1000
+   progress=(((totalGb-freeGb)/totalGb)*1000).toInt().coerceIn(0,1000)
+   progressTintList=android.content.res.ColorStateList.valueOf(Color.CYAN)
+  }
+  container.addView(bar)
+  text("🧹 SMART SCAN")
+
   button("🔎 Zgjidh dosjen për skanim") {
    val i=Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
