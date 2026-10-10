@@ -16,6 +16,9 @@ import java.security.MessageDigest
 class MainActivity : Activity() {
  private val pickerCode = 101
  private val exportCode = 102
+ private val backupPickCode = 103
+ private val backupSaveCode = 104
+ private var backupSource: Uri? = null
  private var lastReport = ""
  private var latestScanFolder: Uri? = null
  private lateinit var result: TextView
@@ -64,6 +67,14 @@ class MainActivity : Activity() {
     })
    } catch (_:Exception) { Toast.makeText(this,"Hape dosjen nga Files",Toast.LENGTH_LONG).show() }
   }
+  button("🛡️ Smart Backup – kopjo një skedar") {
+   val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+    addCategory(Intent.CATEGORY_OPENABLE)
+    type="*/*"
+    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+   }
+   startActivityForResult(intent,backupPickCode)
+  }
   button("🕘 Historiku i skanimeve") {
    val history=getSharedPreferences("scan_history",MODE_PRIVATE).getString("recent","Nuk ka skanime të përfunduara.")
    result.text=history
@@ -72,7 +83,7 @@ class MainActivity : Activity() {
   container.addView(result)
   text("🛡️ HTML Project Guardian: skedarët index.html dhe versionet e ndryshme nuk fshihen automatikisht.")
   text("📸 Duplikatet identike identifikohen me SHA-256. Fotografitë e ngjashme kërkojnë analizë tjetër.")
-  text("♻️ Smart Backup, Email Cleaner dhe AI janë module të planifikuara; nuk janë aktivizuar ende.")
+  text("♻️ Smart Backup kopjon një skedar të zgjedhur. Email Cleaner dhe AI janë ende në zhvillim.")
   setContentView(root)
  }
  private fun title(s:String){ val v=TextView(this).apply { text=s; textSize=29f; setTextColor(Color.CYAN); setTypeface(null,Typeface.BOLD); setPadding(0,0,0,20) }; container.addView(v) }
@@ -81,6 +92,38 @@ class MainActivity : Activity() {
  override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
   super.onActivityResult(requestCode,resultCode,data)
   if(resultCode!=RESULT_OK) return
+  if(requestCode==backupPickCode) {
+   backupSource=data?.data ?: return
+   val name=try {
+    contentResolver.query(backupSource!!,arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),null,null,null)?.use {
+     if(it.moveToFirst()) it.getString(0) else "backup.bin"
+    } ?: "backup.bin"
+   } catch (_:Exception) { "backup.bin" }
+   startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+    addCategory(Intent.CATEGORY_OPENABLE)
+    type="application/octet-stream"
+    putExtra(Intent.EXTRA_TITLE,"Backup_"+name)
+   },backupSaveCode)
+   return
+  }
+  if(requestCode==backupSaveCode) {
+   val source=backupSource
+   val target=data?.data
+   if(source!=null && target!=null) {
+    Thread {
+     try {
+      val input=contentResolver.openInputStream(source) ?: throw java.io.IOException("Cannot open source")
+      val output=contentResolver.openOutputStream(target) ?: throw java.io.IOException("Cannot open destination")
+      input.use { i -> output.use { o -> i.copyTo(o) } }
+      runOnUiThread { Toast.makeText(this,"Kopja rezervë u krijua",Toast.LENGTH_LONG).show() }
+     } catch (_:Exception) {
+      runOnUiThread { Toast.makeText(this,"Backup dështoi. Kontrollo hapësirën dhe lejet.",Toast.LENGTH_LONG).show() }
+     }
+    }.start()
+   }
+   backupSource=null
+   return
+  }
   if(requestCode==exportCode) {
    try {
     val target=data?.data ?: return
