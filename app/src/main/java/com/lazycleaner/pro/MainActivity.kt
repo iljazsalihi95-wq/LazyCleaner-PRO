@@ -185,14 +185,23 @@ class MainActivity : Activity() {
    }.show()
  }
  private fun showInstalledApps(){
+  val usageManager=getSystemService(android.content.Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+  val end=System.currentTimeMillis()
+  val usage=usageManager.queryUsageStats(android.app.usage.UsageStatsManager.INTERVAL_DAILY,end-30L*86400000,end)
+  val lastUsed=usage.groupBy{it.packageName}.mapValues{entry->entry.value.maxOfOrNull{it.lastTimeUsed}?:0L}
+  val hasUsageAccess=usage.isNotEmpty()
+
   candidatesList.removeAllViews()
   candidatesList.addView(label("Aplikacionet – çinstalim me miratimin tënd",16f,Color.CYAN,true))
   val apps=packageManager.getInstalledApplications(0)
    .filter { it.packageName!=packageName && it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM==0 }
    .sortedBy { packageManager.getApplicationLabel(it).toString().lowercase() }
+  if(!hasUsageAccess) action(candidatesList,"🔐","Lejo statistikat e përdorimit","Për të identifikuar aplikacionet e papërdorura"){startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS))}
   for(app in apps.take(150)){
    val appName=packageManager.getApplicationLabel(app).toString()
-   action(candidatesList,"📦",appName,"Çinstalo përmes Android-it"){
+   val last=lastUsed[app.packageName]?:0L
+   val detail=if(!hasUsageAccess)"Çinstalo përmes Android-it" else if(last==0L)"Nuk figuron i përdorur në 30 ditë" else "Përdorur "+((end-last)/86400000)+" ditë më parë"
+   action(candidatesList,"📦",appName,detail){
     android.app.AlertDialog.Builder(this).setTitle("Çinstalo $appName?")
      .setMessage("Android do të kërkojë konfirmimin tënd.")
      .setNegativeButton("Anulo",null).setPositiveButton("Vazhdo"){_,_->
@@ -256,7 +265,7 @@ class MainActivity : Activity() {
    }
    val duplicates=hashes.values.filter { it.size>1 }
    val candidates=duplicates.flatMap { it.drop(1) }
-   val message="Skanimi i medias përfundoi.\\nSkedarë: $total\\nMadhësia: ${bytes/1048576} MB\\nGrupe duplikatesh: ${duplicates.size}\\nGabime leximi: $errors\\n\\n"+
+   val message="Skanimi i medias përfundoi.\nSkedarë: $total\\nMadhësia: ${bytes/1048576} MB\\nGrupe duplikatesh: ${duplicates.size}\nGabime leximi: $errors\\n\\n"+
     duplicates.take(25).joinToString("\\n\\n"){group->group.joinToString("\\n"){it.second}}+
     "\\n\\nAsgjë nuk është fshirë. Dokumentet dhe dosjet e mbrojtura nga Android kërkojnë zgjedhje të veçantë."
    runOnUiThread {
