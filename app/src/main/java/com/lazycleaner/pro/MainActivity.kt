@@ -17,6 +17,8 @@ class MainActivity : Activity() {
  private val mediaPermissionCode = 201
  private val deleteRequestCode = 202
  private val selectedMedia=linkedSetOf<Uri>()
+ private val mediaDates=mutableMapOf<Uri,Long>()
+ private val verifiedDuplicates=linkedSetOf<Uri>()
  private val mediaCandidates=mutableListOf<Pair<Uri,String>>()
  private lateinit var candidatesList: LinearLayout
  private val pickerCode = 101
@@ -146,23 +148,31 @@ class MainActivity : Activity() {
   val sensitive=listOf("backup","kopje_rezerve","passport","pasaport","ausweis","rechnung","invoice","quittung","vertrag","contract","bank","steuer","tax","mitglied","antare","hudbe","hadith","projekt","project")
   return extensions.any { n.endsWith(it) } || sensitive.any { n.contains(it) }
  }
- private fun showSelection(items:List<Pair<Uri,String>>,heading:String){
+ private fun showSelection(items:List<Pair<Uri,String>>,heading:String,autoRecommend:Boolean=false){
   selectedMedia.clear();candidatesList.removeAllViews()
   candidatesList.addView(label(heading,16f,Color.rgb(61,222,226),true))
-  if(items.isEmpty()){ candidatesList.addView(label("Nuk ka skedarë të listuar. Skano telefonin fillimisht.",13f));return }
-  candidatesList.addView(label("Vetëm skedarët e zgjedhur nga ti mund të kërkohen për fshirje. Dokumentet e ndjeshme janë të bllokuara.",12f,Color.rgb(166,193,219)))
+  if(items.isEmpty()){candidatesList.addView(label("Nuk u gjetën kandidatë.",13f));return}
+  candidatesList.addView(label("Kopjet identike të vjetra rekomandohen. Screenshot-et e tjera kontrolloji para fshirjes. Një kopje e çdo grupi ruhet.",12f,Color.rgb(166,193,219)))
+  val checks=mutableListOf<CheckBox>()
   for((uri,name) in items.take(300)){
-   val protected=protectedFile(name)
+   val duplicate=verifiedDuplicates.contains(uri)
+   val sensitive=protectedFile(name)
    val check=CheckBox(this).apply {
-    isEnabled=!protected
-    text=(if(protected)"🔒 RUAJ: " else "Për kontroll: ")+name; textSize=13f; setTextColor(Color.WHITE);buttonTintList=android.content.res.ColorStateList.valueOf(Color.CYAN)
+    isEnabled=true
+    text=(if(duplicate)"✓ KOPJE E TEPËRT: " else if(sensitive)"⚠ DOKUMENT – KONTROLLO: " else "Për kontroll: ")+name
+    textSize=13f;setTextColor(Color.WHITE)
+    buttonTintList=android.content.res.ColorStateList.valueOf(Color.CYAN)
+    isChecked=autoRecommend && duplicate
     setOnCheckedChangeListener { _,checked->if(checked)selectedMedia.add(uri) else selectedMedia.remove(uri) }
    }
-   candidatesList.addView(check)
+   if(check.isChecked) selectedMedia.add(uri)
+   checks.add(check);candidatesList.addView(check)
   }
-  action(candidatesList,"🗑️","KALO NË KOSH TË ZGJEDHURAT","Kërkohet miratimi i Android-it"){confirmDelete()}
+  action(candidatesList,"☑","ZGJIDH TË GJITHA","Përzgjedh të gjithë kandidatët e shfaqur"){checks.forEach { it.isChecked=true }}
+  action(candidatesList,"↩","HIQ PËRZGJEDHJEN","Lë gjithçka pa shënuar"){checks.forEach { it.isChecked=false }}
+  action(candidatesList,"🗑️","KALO NË KOSH TË ZGJEDHURAT","Me konfirmim nga Android"){confirmDelete()}
  }
- private fun showCandidates(){showSelection(mediaCandidates,"Duplikatet e medias")}
+ private fun showCandidates(){showSelection(mediaCandidates,"Duplikatet e medias",true)}
  private fun showScreenshots(){
   val screenshots=mutableListOf<Pair<Uri,String>>()
   try{
@@ -180,9 +190,7 @@ class MainActivity : Activity() {
   showSelection(screenshots,"Screenshot-et (zgjidh për fshirje)")
  }
  private fun confirmDelete(){
-  val uris=selectedMedia.toList().filter { uri ->
-   mediaCandidates.none { it.first==uri && protectedFile(it.second) }
-  }.distinct()
+  val uris=selectedMedia.toList().distinct()
   if(uris.isEmpty()){
    Toast.makeText(this,"Zgjidh të paktën një skedar të lejuar",Toast.LENGTH_LONG).show()
    return
@@ -260,18 +268,21 @@ class MainActivity : Activity() {
     android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI)
    val projection=arrayOf(android.provider.MediaStore.MediaColumns._ID,
     android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
-    android.provider.MediaStore.MediaColumns.SIZE)
+    android.provider.MediaStore.MediaColumns.SIZE,
+    android.provider.MediaStore.MediaColumns.DATE_MODIFIED)
    for(base in collections){
     try {
      contentResolver.query(base,projection,null,null,null)?.use { cursor ->
       val idColumn=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns._ID)
       val nameColumn=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)
       val sizeColumn=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.SIZE)
+      val dateColumn=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DATE_MODIFIED)
       while(cursor.moveToNext() && total<20000){
        val id=cursor.getLong(idColumn)
        val name=cursor.getString(nameColumn) ?: "media"
        val size=if(cursor.isNull(sizeColumn)) 0L else cursor.getLong(sizeColumn)
        val file=android.content.ContentUris.withAppendedId(base,id)
+       mediaDates[file]=if(cursor.isNull(dateColumn)) 0L else cursor.getLong(dateColumn)
        total++;bytes+=size
        try {
         val md=MessageDigest.getInstance("SHA-256")
@@ -287,15 +298,16 @@ class MainActivity : Activity() {
     }catch (_:Exception){errors++}
    }
    val duplicates=hashes.values.filter { it.size>1 }
-   val candidates=duplicates.flatMap { it.drop(1) }.filterNot { protectedFile(it.second) }
+   val candidates=duplicates.flatMap { group -> group.sortedWith(compareByDescending<Pair<Uri,String>> { mediaDates[it.first] ?: 0L }.thenBy { it.second }).drop(1) }
    val message="Skanimi i medias përfundoi.\nSkedarë: $total\\nMadhësia: ${bytes/1048576} MB\\nGrupe duplikatesh: ${duplicates.size}\nGabime leximi: $errors\\n\\n"+
     duplicates.take(25).joinToString("\\n\\n"){group->group.joinToString("\\n"){it.second}}+
     "\\n\\nAsgjë nuk është fshirë. Dokumentet dhe dosjet e mbrojtura nga Android kërkojnë zgjedhje të veçantë."
    runOnUiThread {
     cleanupCandidates.clear();cleanupCandidates.addAll(candidates)
     mediaCandidates.clear();mediaCandidates.addAll(candidates)
+    verifiedDuplicates.clear();verifiedDuplicates.addAll(candidates.map { it.first })
     lastReport=message;result.text=message
-    showSelection(candidates,"Duplikate të medias: ${candidates.size} skedarë të përzgjedhshëm")
+    showSelection(candidates,"Duplikate identike: ${candidates.size} kopje të tepërta",true)
     val prefs=getSharedPreferences("scan_history",MODE_PRIVATE)
     val now=java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.getDefault()).format(java.util.Date())
     val prev=prefs.getString("recent","") ?: ""
@@ -391,7 +403,7 @@ class MainActivity : Activity() {
    }
    try {scan(uri,0)} catch (_:Exception){failures++}
    val duplicates=hashes.values.filter{it.size>1}
-   val candidates=duplicates.flatMap { it.drop(1) }.filterNot { protectedFile(it.second) }
+   val candidates=duplicates.flatMap { it.drop(1) }
    val largest=fileSizes.sortedByDescending { it.second }.take(15).joinToString("\n") { "${it.first}: ${it.second/1048576} MB" }
    val message="Skedarë: $total\nHTML: $html\nScreenshot: $screenshots\nGrupe identike: ${duplicates.size}\nMadhësia e skanuar: ${scannedBytes/1048576} MB\nGabime leximi: $failures\n\n"+
     duplicates.take(25).joinToString("\n\n"){ "Duplikate:\n"+it.joinToString("\n") { item -> item.second } }+
