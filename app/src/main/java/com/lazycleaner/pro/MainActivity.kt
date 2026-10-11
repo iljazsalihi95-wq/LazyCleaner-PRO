@@ -140,13 +140,22 @@ class MainActivity : Activity() {
   container.addView(label("🔒 Nuk fshihen skedarë automatikisht. Projektet HTML mbrohen.",12f,Color.rgb(147,177,202)))
   setContentView(root)
  }
+ private fun protectedFile(name:String):Boolean {
+  val n=name.lowercase(java.util.Locale.ROOT)
+  val extensions=listOf(".pdf",".doc",".docx",".xls",".xlsx",".ppt",".pptx",".txt",".rtf",".odt",".ods",".html",".htm",".js",".json",".xml",".gs",".kt",".java",".zip",".7z",".rar",".db",".sqlite",".key",".pem",".p12",".keystore")
+  val sensitive=listOf("backup","kopje_rezerve","passport","pasaport","ausweis","rechnung","invoice","quittung","vertrag","contract","bank","steuer","tax","mitglied","antare","hudbe","hadith","projekt","project")
+  return extensions.any { n.endsWith(it) } || sensitive.any { n.contains(it) }
+ }
  private fun showSelection(items:List<Pair<Uri,String>>,heading:String){
   selectedMedia.clear();candidatesList.removeAllViews()
   candidatesList.addView(label(heading,16f,Color.rgb(61,222,226),true))
   if(items.isEmpty()){ candidatesList.addView(label("Nuk ka skedarë të listuar. Skano telefonin fillimisht.",13f));return }
+  candidatesList.addView(label("Vetëm skedarët e zgjedhur nga ti mund të kërkohen për fshirje. Dokumentet e ndjeshme janë të bllokuara.",12f,Color.rgb(166,193,219)))
   for((uri,name) in items.take(300)){
+   val protected=protectedFile(name)
    val check=CheckBox(this).apply {
-    text=name; textSize=13f; setTextColor(Color.WHITE);buttonTintList=android.content.res.ColorStateList.valueOf(Color.CYAN)
+    isEnabled=!protected
+    text=(if(protected)"🔒 RUAJ: " else "Për kontroll: ")+name; textSize=13f; setTextColor(Color.WHITE);buttonTintList=android.content.res.ColorStateList.valueOf(Color.CYAN)
     setOnCheckedChangeListener { _,checked->if(checked)selectedMedia.add(uri) else selectedMedia.remove(uri) }
    }
    candidatesList.addView(check)
@@ -171,7 +180,7 @@ class MainActivity : Activity() {
   showSelection(screenshots,"Screenshot-et (zgjidh për fshirje)")
  }
  private fun confirmDelete(){
-  val uris=selectedMedia.toList()
+  val uris=selectedMedia.toList().filter { uri -> mediaCandidates.none { it.first==uri && protectedFile(it.second) } }
   if(uris.isEmpty()){Toast.makeText(this,"Zgjidh të paktën një skedar",Toast.LENGTH_SHORT).show();return}
   android.app.AlertDialog.Builder(this).setTitle("Konfirmo fshirjen")
    .setMessage("Të kërkohet fshirja e ${uris.size} skedarëve të zgjedhur. Android do të kërkojë miratimin përfundimtar.")
@@ -264,7 +273,7 @@ class MainActivity : Activity() {
     }catch (_:Exception){errors++}
    }
    val duplicates=hashes.values.filter { it.size>1 }
-   val candidates=duplicates.flatMap { it.drop(1) }
+   val candidates=duplicates.flatMap { it.drop(1) }.filterNot { protectedFile(it.second) }
    val message="Skanimi i medias përfundoi.\nSkedarë: $total\\nMadhësia: ${bytes/1048576} MB\\nGrupe duplikatesh: ${duplicates.size}\nGabime leximi: $errors\\n\\n"+
     duplicates.take(25).joinToString("\\n\\n"){group->group.joinToString("\\n"){it.second}}+
     "\\n\\nAsgjë nuk është fshirë. Dokumentet dhe dosjet e mbrojtura nga Android kërkojnë zgjedhje të veçantë."
@@ -360,7 +369,7 @@ class MainActivity : Activity() {
    }
    try {scan(uri,0)} catch (_:Exception){failures++}
    val duplicates=hashes.values.filter{it.size>1}
-   val candidates=duplicates.flatMap { it.drop(1) }.filterNot { (_, name) -> name.endsWith(".html",true) || name.endsWith(".htm",true) || name.endsWith(".js",true) || name.endsWith(".gs",true) || name.endsWith(".json",true) }
+   val candidates=duplicates.flatMap { it.drop(1) }.filterNot { protectedFile(it.second) }
    val largest=fileSizes.sortedByDescending { it.second }.take(15).joinToString("\n") { "${it.first}: ${it.second/1048576} MB" }
    val message="Skedarë: $total\nHTML: $html\nScreenshot: $screenshots\nGrupe identike: ${duplicates.size}\nMadhësia e skanuar: ${scannedBytes/1048576} MB\nGabime leximi: $failures\n\n"+
     duplicates.take(25).joinToString("\n\n"){ "Duplikate:\n"+it.joinToString("\n") { item -> item.second } }+
