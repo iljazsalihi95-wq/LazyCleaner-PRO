@@ -17,6 +17,7 @@ class MainActivity : Activity() {
  private val mediaPermissionCode = 201
  private val deleteRequestCode = 202
  private val uninstallRequestCode = 203
+ private val compressPickCode = 204
  private val uninstallQueue=mutableListOf<String>()
  private var pendingUninstall:String?=null
  private val pendingTrash=mutableListOf<Uri>()
@@ -108,6 +109,7 @@ class MainActivity : Activity() {
   }
   action(tools,"🗑️","Zgjidh dhe fshi duplikatet","Shiko listën, selekto dhe konfirmo fshirjen"){ showCandidates() }
   action(tools,"📸","Screenshot-et","Shiko fotografitë e ekranit për përzgjedhje"){ showScreenshots() }
+  action(tools,"🖼️","Kompreso fotografitë","Fotografi reale, pa screenshot-e; origjinalet ruhen"){ pickPhotosForCompression() }
   action(tools,"🚀","Process Manager • RAM","Shiko RAM-in real dhe menaxho aplikacionet"){ showProcessManager() }
   action(tools,"📦","Aplikacionet e instaluara","Zgjidh aplikacionin për çinstalim"){ showInstalledApps() }
   action(tools,"🧾","Raporti i kandidatëve","Shiko listën pa fshirje"){
@@ -237,6 +239,61 @@ class MainActivity : Activity() {
       .setMessage(detail+"\nNuk është fshirë asgjë.").setPositiveButton("OK",null).show()
     }
    }.show()
+ }
+ private fun pickPhotosForCompression(){
+  android.app.AlertDialog.Builder(this).setTitle("Kompresim fotografish")
+   .setMessage("Zgjidh fotografitë reale. Screenshot-et do të anashkalohen. Kopjet e kompresuara ruhen në Pictures/LazyCleaner; origjinalet nuk fshihen. Fotot JPEG ruhen me cilësi 82%.")
+   .setNegativeButton("Anulo",null).setPositiveButton("Zgjidh fotografitë"){_,_->
+    val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+     type="image/*"
+     addCategory(Intent.CATEGORY_OPENABLE)
+     putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true)
+     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    startActivityForResult(intent,compressPickCode)
+   }.show()
+ }
+ private fun compressPhotos(data:Intent?){
+  val uris=mutableListOf<Uri>()
+  data?.clipData?.let { clip->for(i in 0 until clip.itemCount) uris.add(clip.getItemAt(i).uri) }
+  if(uris.isEmpty()) data?.data?.let { uris.add(it) }
+  if(uris.isEmpty()) return
+  result.text="Duke kompresuar ${uris.size} fotografi..."
+  Thread{
+   var saved=0
+   var skipped=0
+   var before=0L
+   var after=0L
+   for(uri in uris.take(50)){
+    try{
+     val name=contentResolver.query(uri,arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),null,null,null)?.use{
+      if(it.moveToFirst()) it.getString(0) else "foto"
+     } ?: "foto"
+     if(name.contains("screenshot",true)||name.contains("screen_shot",true)){skipped++;continue}
+     val originalBytes=contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: continue
+     val bitmap=android.graphics.BitmapFactory.decodeByteArray(originalBytes,0,originalBytes.size) ?: continue
+     val buffer=java.io.ByteArrayOutputStream()
+     bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG,82,buffer)
+     val compressed=buffer.toByteArray()
+     bitmap.recycle()
+     before+=originalBytes.size
+     if(compressed.size>=originalBytes.size){skipped++;continue}
+     val values=android.content.ContentValues().apply{
+      put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME,"LazyCleaner_"+name.substringBeforeLast('.')+".jpg")
+      put(android.provider.MediaStore.MediaColumns.MIME_TYPE,"image/jpeg")
+      put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,"Pictures/LazyCleaner")
+     }
+     val dest=contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values) ?: continue
+     try{
+      contentResolver.openOutputStream(dest)?.use { it.write(compressed) } ?: throw java.io.IOException("Output unavailable")
+      after+=compressed.size;saved++
+     }catch(e:Exception){contentResolver.delete(dest,null,null);throw e}
+    }catch(_:Exception){skipped++}
+   }
+   runOnUiThread{
+    result.text="Kompresimi përfundoi. Kopje të reja: $saved. Të anashkaluara: $skipped. Kursim i mundshëm pas kontrollit dhe heqjes së origjinaleve: ${(before-after).coerceAtLeast(0L)/1024} KB. Origjinalet janë ruajtur. Fotot e reja gjenden te Pictures/LazyCleaner."
+   }
+  }.start()
  }
  private fun showProcessManager(){
   val manager=getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
@@ -393,6 +450,7 @@ class MainActivity : Activity() {
   }.start()
  }
  override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
+  if(requestCode==compressPickCode){if(resultCode==RESULT_OK)compressPhotos(data);return}
   if(requestCode==uninstallRequestCode){
    val pkg=pendingUninstall
    val stillInstalled=if(pkg==null) false else try{
