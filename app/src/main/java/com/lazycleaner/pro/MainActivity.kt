@@ -14,6 +14,7 @@ import android.widget.*
 import java.security.MessageDigest
 
 class MainActivity : Activity() {
+ private val mediaPermissionCode = 201
  private val pickerCode = 101
  private val exportCode = 102
  private val backupPickCode = 103
@@ -89,7 +90,8 @@ class MainActivity : Activity() {
   val tools=card()
   tools.addView(label("MJETET E PASTRIMIT",13f,Color.rgb(65,224,226),true),
    LinearLayout.LayoutParams(-1,dp(35)))
-  action(tools,"🔍","Smart Scan","Skano një dosje dhe zbulo duplikatet"){
+  action(tools,"📱","SKANO TELEFONIN","Kërko lejen dhe analizo foto, video dhe audio"){ startPhoneScan() }
+  action(tools,"🔍","Skano një dosje","Për dokumente dhe dosje të tjera"){
    val i=Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
    startActivityForResult(i,pickerCode)
@@ -128,6 +130,73 @@ class MainActivity : Activity() {
   container.addView(output)
   container.addView(label("🔒 Nuk fshihen skedarë automatikisht. Projektet HTML mbrohen.",12f,Color.rgb(147,177,202)))
   setContentView(root)
+ }
+ private fun startPhoneScan(){
+  val permissions=if(android.os.Build.VERSION.SDK_INT>=33)
+   arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES,android.Manifest.permission.READ_MEDIA_VIDEO,android.Manifest.permission.READ_MEDIA_AUDIO)
+  else arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+  val missing=permissions.filter { checkSelfPermission(it)!=android.content.pm.PackageManager.PERMISSION_GRANTED }
+  if(missing.isNotEmpty()) requestPermissions(missing.toTypedArray(),mediaPermissionCode)
+  else scanPhoneMedia()
+ }
+ override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){
+  super.onRequestPermissionsResult(requestCode,permissions,grantResults)
+  if(requestCode==mediaPermissionCode){
+   if(grantResults.any { it==android.content.pm.PackageManager.PERMISSION_GRANTED }) scanPhoneMedia()
+   else result.text="Qasja nuk u lejua. Lejo fotografitë, videot ose audion te Settings → Apps → LazyCleaner PRO → Permissions."
+  }
+ }
+ private fun scanPhoneMedia(){
+  result.text="Duke analizuar median e telefonit…"
+  Thread {
+   var total=0;var bytes=0L;var errors=0
+   val hashes=mutableMapOf<String,MutableList<Pair<Uri,String>>>()
+   val collections=listOf(
+    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+    android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+    android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI)
+   val projection=arrayOf(android.provider.MediaStore.MediaColumns._ID,
+    android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+    android.provider.MediaStore.MediaColumns.SIZE)
+   for(base in collections){
+    try {
+     contentResolver.query(base,projection,null,null,null)?.use { cursor ->
+      val idColumn=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns._ID)
+      val nameColumn=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)
+      val sizeColumn=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.SIZE)
+      while(cursor.moveToNext() && total<20000){
+       val id=cursor.getLong(idColumn)
+       val name=cursor.getString(nameColumn) ?: "media"
+       val size=if(cursor.isNull(sizeColumn)) 0L else cursor.getLong(sizeColumn)
+       val file=android.content.ContentUris.withAppendedId(base,id)
+       total++;bytes+=size
+       try {
+        val md=MessageDigest.getInstance("SHA-256")
+        contentResolver.openInputStream(file)?.use { input ->
+         val buf=ByteArray(32768)
+         while(true){val n=input.read(buf);if(n<0)break;md.update(buf,0,n)}
+         val digest=md.digest().joinToString("") { "%02x".format(it) }
+         hashes.getOrPut(digest){mutableListOf()}.add(file to name)
+        }
+       }catch (_:Exception){errors++}
+      }
+     }
+    }catch (_:Exception){errors++}
+   }
+   val duplicates=hashes.values.filter { it.size>1 }
+   val candidates=duplicates.flatMap { it.drop(1) }
+   val message="Skanimi i medias përfundoi.\\nSkedarë: $total\\nMadhësia: ${bytes/1048576} MB\\nGrupe duplikatesh: ${duplicates.size}\\nGabime leximi: $errors\\n\\n"+
+    duplicates.take(25).joinToString("\\n\\n"){group->group.joinToString("\\n"){it.second}}+
+    "\\n\\nAsgjë nuk është fshirë. Dokumentet dhe dosjet e mbrojtura nga Android kërkojnë zgjedhje të veçantë."
+   runOnUiThread {
+    cleanupCandidates.clear();cleanupCandidates.addAll(candidates)
+    lastReport=message;result.text=message
+    val prefs=getSharedPreferences("scan_history",MODE_PRIVATE)
+    val now=java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.getDefault()).format(java.util.Date())
+    val prev=prefs.getString("recent","") ?: ""
+    prefs.edit().putString("recent",("$now — Media: $total skedarë, ${duplicates.size} grupe\\n"+prev).lines().take(20).joinToString("\\n")).apply()
+   }
+  }.start()
  }
  override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
   super.onActivityResult(requestCode,resultCode,data)
