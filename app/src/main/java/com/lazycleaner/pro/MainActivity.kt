@@ -94,8 +94,8 @@ class MainActivity : Activity() {
   val tools=card()
   tools.addView(label("MJETET E PASTRIMIT",13f,Color.rgb(65,224,226),true),
    LinearLayout.LayoutParams(-1,dp(35)))
-  action(tools,"📱","SKANO TELEFONIN","Kërko lejen dhe analizo foto, video dhe audio"){ startPhoneScan() }
-  action(tools,"🔍","Skano një dosje","Për dokumente dhe dosje të tjera"){
+  action(tools,"📱","SKANO TELEFONIN","Skanon median pa zgjedhur dosje"){ startPhoneScan() }
+  action(tools,"🔍","Skano një dosje","Vetëm nën-dosje të lejuara nga Android"){
    val i=Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
    startActivityForResult(i,pickerCode)
@@ -104,7 +104,7 @@ class MainActivity : Activity() {
   action(tools,"📸","Screenshot-et","Shiko fotografitë e ekranit për përzgjedhje"){ showScreenshots() }
   action(tools,"📦","Aplikacionet e instaluara","Zgjidh aplikacionin për çinstalim"){ showInstalledApps() }
   action(tools,"🧾","Raporti i kandidatëve","Shiko listën pa fshirje"){
-   result.text=if(cleanupCandidates.isEmpty()) "Së pari skano një dosje. Nuk ka kandidatë të identifikuar."
+   result.text=if(cleanupCandidates.isEmpty()) "Shtyp SKANO TELEFONIN për të analizuar median."
     else "Duplikate identike (skedarët e projekteve janë përjashtuar):\n"+cleanupCandidates.take(80).joinToString("\n") { "• "+it.second }+"\n\nAsnjë skedar nuk është fshirë."
   }
   action(tools,"🛡️","Smart Backup","Kopjo një skedar në vend të sigurt"){
@@ -113,7 +113,7 @@ class MainActivity : Activity() {
    },backupPickCode)
   }
   action(tools,"📄","Eksporto raportin","Ruaje analizën në format TXT"){
-   if(lastReport.isBlank()) Toast.makeText(this,"Së pari skano një dosje",Toast.LENGTH_SHORT).show()
+   if(lastReport.isBlank()) Toast.makeText(this,"Së pari kryej një skanim",Toast.LENGTH_SHORT).show()
    else startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
     addCategory(Intent.CATEGORY_OPENABLE);type="text/plain";putExtra(Intent.EXTRA_TITLE,"LazyCleaner_Report.txt")
    },exportCode)
@@ -131,7 +131,7 @@ class MainActivity : Activity() {
   container.addView(tools)
   val output=card()
   output.addView(label("REZULTATET E ANALIZËS",13f,Color.rgb(65,224,226),true))
-  result=label("Zgjidh Smart Scan për të filluar analizën.",14f,Color.rgb(207,225,238))
+  result=label("Shtyp SKANO TELEFONIN. Nuk kërkohet zgjedhja e dosjes kryesore.",14f,Color.rgb(207,225,238))
   result.setPadding(0,dp(10),0,dp(8))
   output.addView(result)
   container.addView(output)
@@ -272,6 +272,7 @@ class MainActivity : Activity() {
     cleanupCandidates.clear();cleanupCandidates.addAll(candidates)
     mediaCandidates.clear();mediaCandidates.addAll(candidates)
     lastReport=message;result.text=message
+    showSelection(candidates,"Duplikate të medias: ${candidates.size} skedarë të përzgjedhshëm")
     val prefs=getSharedPreferences("scan_history",MODE_PRIVATE)
     val now=java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.getDefault()).format(java.util.Date())
     val prev=prefs.getString("recent","") ?: ""
@@ -367,6 +368,7 @@ class MainActivity : Activity() {
    runOnUiThread {
     cleanupCandidates.clear()
     cleanupCandidates.addAll(candidates)
+    mediaCandidates.clear()
     lastReport=message
     result.text=message
     val prefs=getSharedPreferences("scan_history",MODE_PRIVATE)
