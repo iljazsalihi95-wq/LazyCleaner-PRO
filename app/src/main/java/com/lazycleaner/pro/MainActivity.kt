@@ -26,6 +26,11 @@ class MainActivity : Activity() {
  private val verifiedDuplicates=linkedSetOf<Uri>()
  private val mediaCandidates=mutableListOf<Pair<Uri,String>>()
  private lateinit var candidatesList: LinearLayout
+ private lateinit var liveRing: ProgressBar
+ private var ringUpdater: ((Float)->Unit)?=null
+ private lateinit var liveStatus: TextView
+ private lateinit var liveMetric: TextView
+ private var scanRunning=false
  private val pickerCode = 101
  private val exportCode = 102
  private val backupPickCode = 103
@@ -84,6 +89,38 @@ class MainActivity : Activity() {
   names.addView(label("Smart Phone Manager  •  Privat & Lokal",12f,Color.rgb(113,219,232)))
   header.addView(names,LinearLayout.LayoutParams(0,-2,1f))
   container.addView(header,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(20) })
+  val hero=card()
+  hero.addView(label("LAZYCLEANER PRO • LIVE",13f,Color.rgb(65,224,226),true))
+  val circle=android.widget.FrameLayout(this)
+  liveRing=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {
+   max=1000
+   progressTintList=android.content.res.ColorStateList.valueOf(Color.rgb(36,218,234))
+   progressBackgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(36,65,97))
+  }
+  val ringView=object:android.view.View(this){
+   private val paint=android.graphics.Paint(3).apply{style=android.graphics.Paint.Style.STROKE;strokeWidth=dp(16).toFloat();strokeCap=android.graphics.Paint.Cap.ROUND}
+   var fraction=0f
+   override fun onDraw(canvas:android.graphics.Canvas){
+    super.onDraw(canvas)
+    val inset=dp(20).toFloat()
+    val bounds=android.graphics.RectF(inset,inset,width-inset,height-inset)
+    paint.color=Color.rgb(35,68,105)
+    canvas.drawArc(bounds,0f,360f,false,paint)
+    paint.color=Color.rgb(44,221,237)
+    canvas.drawArc(bounds,-90f,360f*fraction,false,paint)
+   }
+   fun setFraction(value:Float){fraction=value.coerceIn(0f,1f);invalidate()}
+  }
+  circle.addView(ringView,android.widget.FrameLayout.LayoutParams(dp(240),dp(240),android.view.Gravity.CENTER))
+  ringUpdater={ value -> ringView.setFraction(value) }
+  val center=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=android.view.Gravity.CENTER}
+  liveStatus=label("GATI PËR SKANIM",19f,Color.WHITE,true).apply{gravity=android.view.Gravity.CENTER}
+  liveMetric=label("0 skedarë të analizuar",13f,Color.rgb(166,214,233)).apply{gravity=android.view.Gravity.CENTER}
+  center.addView(liveStatus);center.addView(liveMetric)
+  circle.addView(center,android.widget.FrameLayout.LayoutParams(dp(210),dp(120),android.view.Gravity.CENTER))
+  hero.addView(circle,LinearLayout.LayoutParams(-1,dp(252)))
+  action(hero,"🔍","SKANO LIVE","Analizo median dhe gjej kopjet e tepërta"){startPhoneScan()}
+  container.addView(hero)
   val stats=StatFs(Environment.getDataDirectory().absolutePath)
   val totalGb=stats.totalBytes.toDouble()/1073741824.0
   val freeGb=stats.availableBytes.toDouble()/1073741824.0
@@ -392,6 +429,11 @@ class MainActivity : Activity() {
   }
  }
  private fun scanPhoneMedia(){
+  if(scanRunning)return
+  scanRunning=true
+  liveStatus.text="DUKE SKANUAR..."
+  liveMetric.text="Po numërohen skedarët"
+  ringUpdater?.invoke(0.02f)
   result.text="Duke analizuar median e telefonit…"
   Thread {
    var total=0;var bytes=0L;var errors=0
@@ -418,6 +460,7 @@ class MainActivity : Activity() {
        val file=android.content.ContentUris.withAppendedId(base,id)
        mediaDates[file]=if(cursor.isNull(dateColumn)) 0L else cursor.getLong(dateColumn)
        total++;bytes+=size
+       if(total%100==0){val count=total;runOnUiThread {liveMetric.text="$count skedarë të analizuar";ringUpdater?.invoke((count/20000f).coerceAtMost(0.95f))}}
        try {
         val md=MessageDigest.getInstance("SHA-256")
         contentResolver.openInputStream(file)?.use { input ->
@@ -440,6 +483,10 @@ class MainActivity : Activity() {
     cleanupCandidates.clear();cleanupCandidates.addAll(candidates)
     mediaCandidates.clear();mediaCandidates.addAll(candidates)
     verifiedDuplicates.clear();verifiedDuplicates.addAll(candidates.map { it.first })
+    scanRunning=false
+    ringUpdater?.invoke(1f)
+    liveStatus.text="SKANIMI PËRFUNDOI"
+    liveMetric.text="$total skedarë • ${candidates.size} kopje të tepërta"
     lastReport=message;result.text=message
     showSelection(candidates,"Duplikate identike: ${candidates.size} kopje të tepërta",true)
     val prefs=getSharedPreferences("scan_history",MODE_PRIVATE)
