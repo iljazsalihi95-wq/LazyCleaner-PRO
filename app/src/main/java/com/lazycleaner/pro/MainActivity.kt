@@ -160,7 +160,7 @@ class MainActivity : Activity() {
    }
    candidatesList.addView(check)
   }
-  action(candidatesList,"🗑️","FSHI TË ZGJEDHURAT","Kërkohet miratimi i Android-it"){confirmDelete()}
+  action(candidatesList,"🗑️","KALO NË KOSH TË ZGJEDHURAT","Kërkohet miratimi i Android-it"){confirmDelete()}
  }
  private fun showCandidates(){showSelection(mediaCandidates,"Duplikatet e medias")}
  private fun showScreenshots(){
@@ -180,17 +180,31 @@ class MainActivity : Activity() {
   showSelection(screenshots,"Screenshot-et (zgjidh për fshirje)")
  }
  private fun confirmDelete(){
-  val uris=selectedMedia.toList().filter { uri -> mediaCandidates.none { it.first==uri && protectedFile(it.second) } }
-  if(uris.isEmpty()){Toast.makeText(this,"Zgjidh të paktën një skedar",Toast.LENGTH_SHORT).show();return}
-  android.app.AlertDialog.Builder(this).setTitle("Konfirmo fshirjen")
-   .setMessage("Të kërkohet fshirja e ${uris.size} skedarëve të zgjedhur. Android do të kërkojë miratimin përfundimtar.")
-   .setNegativeButton("Anulo",null).setPositiveButton("Vazhdo"){_,_->
+  val uris=selectedMedia.toList().filter { uri ->
+   mediaCandidates.none { it.first==uri && protectedFile(it.second) }
+  }.distinct()
+  if(uris.isEmpty()){
+   Toast.makeText(this,"Zgjidh të paktën një skedar të lejuar",Toast.LENGTH_LONG).show()
+   return
+  }
+  android.app.AlertDialog.Builder(this)
+   .setTitle("Zhvendos në kosh?")
+   .setMessage("Do të kërkohet miratimi i Android-it për ${uris.size} skedarë. Fillimisht zhvendosen në kosh, jo fshirje e pakthyeshme.")
+   .setNegativeButton("Anulo",null)
+   .setPositiveButton("Vazhdo"){_,_->
     try{
      if(android.os.Build.VERSION.SDK_INT>=30){
-      val pending=android.provider.MediaStore.createDeleteRequest(contentResolver,uris)
+      val batch=uris.take(100)
+      val pending=android.provider.MediaStore.createTrashRequest(contentResolver,batch,true)
       startIntentSenderForResult(pending.intentSender,deleteRequestCode,null,0,0,0)
-     }else Toast.makeText(this,"Fshirja në grup kërkon Android 11+",Toast.LENGTH_LONG).show()
-    }catch(e:Exception){Toast.makeText(this,"Fshirja nuk u nis: ${e.message}",Toast.LENGTH_LONG).show()}
+      if(uris.size>batch.size) Toast.makeText(this,"Po trajtohen 100 të parat. Përsërite për të tjerat.",Toast.LENGTH_LONG).show()
+     }else result.text="Ky version Android kërkon mënyrë tjetër fshirjeje."
+    }catch(e:Exception){
+     val detail="${e.javaClass.simpleName}: ${e.message ?: "pa hollësi"}"
+     result.text="Kërkesa për koshin dështoi: $detail"
+     android.app.AlertDialog.Builder(this).setTitle("Gabim gjatë pastrimit")
+      .setMessage(detail+"\nNuk është fshirë asgjë.").setPositiveButton("OK",null).show()
+    }
    }.show()
  }
  private fun showInstalledApps(){
@@ -290,6 +304,14 @@ class MainActivity : Activity() {
   }.start()
  }
  override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
+  if(requestCode==deleteRequestCode){
+   if(resultCode==RESULT_OK){
+    result.text="Android miratoi zhvendosjen në kosh. Kryej një skanim të ri për rezultatet aktuale."
+    selectedMedia.clear()
+    candidatesList.removeAllViews()
+   }else result.text="Pastrimi u anulua. Nuk u ndryshua asgjë."
+   return
+  }
   super.onActivityResult(requestCode,resultCode,data)
   if(resultCode!=RESULT_OK) return
   if(requestCode==backupPickCode) {
