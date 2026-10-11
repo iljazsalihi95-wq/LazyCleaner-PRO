@@ -61,7 +61,7 @@ class MainActivity : Activity() {
   super.onCreate(savedInstanceState)
   window.statusBarColor=Color.rgb(4,16,34)
   window.navigationBarColor=Color.rgb(4,16,34)
-  val root=ScrollView(this).apply { fillViewport=true; clipToPadding=false }
+  val root=ScrollView(this).apply { isFillViewport=true; clipToPadding=false }
   container=LinearLayout(this).apply {
    orientation=LinearLayout.VERTICAL; setPadding(dp(16),dp(18),dp(16),dp(42))
    background=android.graphics.drawable.GradientDrawable(
