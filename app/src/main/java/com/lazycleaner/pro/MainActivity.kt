@@ -24,76 +24,111 @@ class MainActivity : Activity() {
  private var latestScanFolder: Uri? = null
  private lateinit var result: TextView
  private lateinit var container: LinearLayout
+ private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
+ private fun label(s:String,size:Float=15f,color:Int=Color.WHITE,bold:Boolean=false):TextView =
+  TextView(this).apply { text=s; textSize=size; setTextColor(color); if(bold)setTypeface(null,Typeface.BOLD); gravity=android.view.Gravity.CENTER_VERTICAL }
+ private fun card():LinearLayout = LinearLayout(this).apply {
+  orientation=LinearLayout.VERTICAL; setPadding(dp(16),dp(14),dp(16),dp(14))
+  background=android.graphics.drawable.GradientDrawable().apply {
+   setColor(Color.rgb(15,36,67)); cornerRadius=dp(18).toFloat(); setStroke(dp(1),Color.rgb(34,67,103))
+  }
+  layoutParams=LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(12) }
+ }
+ private fun action(parent:LinearLayout,icon:String,title:String,detail:String,click:()->Unit){
+  val row=LinearLayout(this).apply {
+   orientation=LinearLayout.HORIZONTAL; gravity=android.view.Gravity.CENTER_VERTICAL
+   setPadding(dp(12),dp(12),dp(12),dp(12))
+   background=android.graphics.drawable.GradientDrawable().apply {
+    setColor(Color.rgb(22,49,83)); cornerRadius=dp(14).toFloat()
+   }
+   layoutParams=LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(9) }
+   setOnClickListener { click() }
+  }
+  row.addView(label(icon,24f),LinearLayout.LayoutParams(dp(44),dp(46)))
+  val content=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
+  content.addView(label(title,15f,Color.WHITE,true))
+  content.addView(label(detail,12f,Color.rgb(166,193,219)))
+  row.addView(content,LinearLayout.LayoutParams(0,-2,1f))
+  row.addView(label("›",26f,Color.rgb(52,220,232)))
+  parent.addView(row)
+ }
  override fun onCreate(savedInstanceState: Bundle?) {
   super.onCreate(savedInstanceState)
-  val root = ScrollView(this)
-  container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(28,48,28,28); setBackgroundColor(Color.rgb(3,16,37)) }
+  window.statusBarColor=Color.rgb(4,16,34)
+  window.navigationBarColor=Color.rgb(4,16,34)
+  val root=ScrollView(this).apply { fillViewport=true; clipToPadding=false }
+  container=LinearLayout(this).apply {
+   orientation=LinearLayout.VERTICAL; setPadding(dp(16),dp(18),dp(16),dp(42))
+   background=android.graphics.drawable.GradientDrawable(
+    android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+    intArrayOf(Color.rgb(8,32,64),Color.rgb(3,12,28))
+   )
+  }
   root.addView(container)
-  title("♻ LazyCleaner PRO")
-  val logo=ImageView(this).apply { setImageResource(R.drawable.ic_lazycleaner); layoutParams=LinearLayout.LayoutParams(180,180) }
-  container.addView(logo)
-  text("Smart Phone Manager • Skanim lokal, pa fshirje automatike")
+  val header=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=android.view.Gravity.CENTER_VERTICAL }
+  header.addView(ImageView(this).apply { setImageResource(R.drawable.ic_lazycleaner) },LinearLayout.LayoutParams(dp(66),dp(66)))
+  val names=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
+  names.addView(label("LazyCleaner PRO",24f,Color.WHITE,true))
+  names.addView(label("Smart Phone Manager  •  Privat & Lokal",12f,Color.rgb(113,219,232)))
+  header.addView(names,LinearLayout.LayoutParams(0,-2,1f))
+  container.addView(header,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(20) })
   val stats=StatFs(Environment.getDataDirectory().absolutePath)
   val totalGb=stats.totalBytes.toDouble()/1073741824.0
   val freeGb=stats.availableBytes.toDouble()/1073741824.0
-  text("📊 Hapësira e pajisjes: %.1f GB të lira nga %.1f GB".format(freeGb,totalGb))
+  val storage=card()
+  storage.addView(label("HAPËSIRA E TELEFONIT",12f,Color.rgb(127,195,221),true))
+  storage.addView(label("%.1f GB të lira".format(freeGb),27f,Color.WHITE,true))
+  storage.addView(label("Nga %.1f GB gjithsej".format(totalGb),13f,Color.rgb(172,197,218)))
   val bar=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {
-   max=1000
-   progress=if(totalGb>0) (((totalGb-freeGb)/totalGb)*1000).toInt().coerceIn(0,1000) else 0
-   progressTintList=android.content.res.ColorStateList.valueOf(Color.CYAN)
+   max=1000; progress=if(totalGb>0)(((totalGb-freeGb)/totalGb)*1000).toInt().coerceIn(0,1000) else 0
+   progressTintList=android.content.res.ColorStateList.valueOf(Color.rgb(45,216,220))
+   progressBackgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(38,63,89))
   }
-  container.addView(bar)
-  text("🧹 SMART SCAN")
-
-  button("🔎 Zgjidh dosjen për skanim") {
+  storage.addView(bar,LinearLayout.LayoutParams(-1,dp(14)).apply { topMargin=dp(12) })
+  container.addView(storage)
+  val tools=card()
+  tools.addView(label("MJETET E PASTRIMIT",13f,Color.rgb(65,224,226),true),
+   LinearLayout.LayoutParams(-1,dp(35)))
+  action(tools,"🔍","Smart Scan","Skano një dosje dhe zbulo duplikatet"){
    val i=Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
    startActivityForResult(i,pickerCode)
   }
-  button("💾 Ruaj raportin (.txt)") {
+  action(tools,"🧾","Kandidatët për pastrim","Vetëm sugjerime, pa fshirje automatike"){
+   result.text=if(cleanupCandidates.isEmpty()) "Së pari skano një dosje. Nuk ka kandidatë të identifikuar."
+    else "Duplikate identike (skedarët e projekteve janë përjashtuar):\n"+cleanupCandidates.take(80).joinToString("\n") { "• "+it.second }+"\n\nAsnjë skedar nuk është fshirë."
+  }
+  action(tools,"🛡️","Smart Backup","Kopjo një skedar në vend të sigurt"){
+   startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+    addCategory(Intent.CATEGORY_OPENABLE);type="*/*";addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+   },backupPickCode)
+  }
+  action(tools,"📄","Eksporto raportin","Ruaje analizën në format TXT"){
    if(lastReport.isBlank()) Toast.makeText(this,"Së pari skano një dosje",Toast.LENGTH_SHORT).show()
    else startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-    addCategory(Intent.CATEGORY_OPENABLE)
-    type="text/plain"
-    putExtra(Intent.EXTRA_TITLE,"LazyCleaner_Report.txt")
+    addCategory(Intent.CATEGORY_OPENABLE);type="text/plain";putExtra(Intent.EXTRA_TITLE,"LazyCleaner_Report.txt")
    },exportCode)
   }
-  button("📂 Hap dosjen e fundit të skanuar") {
+  action(tools,"📂","Dosja e fundit","Hap dosjen e skanuar"){
    val folder=latestScanFolder
    if(folder==null) Toast.makeText(this,"Së pari zgjidh një dosje",Toast.LENGTH_SHORT).show()
-   else try {
-    startActivity(Intent(Intent.ACTION_VIEW).apply {
-     setDataAndType(folder,DocumentsContract.Document.MIME_TYPE_DIR)
-     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    })
-   } catch (_:Exception) { Toast.makeText(this,"Hape dosjen nga Files",Toast.LENGTH_LONG).show() }
+   else try { startActivity(Intent(Intent.ACTION_VIEW).apply {
+    setDataAndType(folder,DocumentsContract.Document.MIME_TYPE_DIR);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+   }) } catch (_:Exception) { Toast.makeText(this,"Hape dosjen nga Files",Toast.LENGTH_LONG).show() }
   }
-  button("🧾 Kandidatët për pastrim (pa fshirje)") {
-   result.text=if(cleanupCandidates.isEmpty()) "Së pari skano një dosje. Nuk ka kandidatë të identifikuar."
-    else "Duplikate identike (skedarët e projekteve janë përjashtuar) – shqyrto para çdo veprimi:\n"+cleanupCandidates.take(80).joinToString("\n") { "• "+it.second }+"\n\nAsnjë skedar nuk është fshirë."
+  action(tools,"🕘","Historiku","Shiko skanimet e mëparshme"){
+   result.text=getSharedPreferences("scan_history",MODE_PRIVATE).getString("recent","Nuk ka skanime të përfunduara.")
   }
-  button("🛡️ Smart Backup – kopjo një skedar") {
-   val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-    addCategory(Intent.CATEGORY_OPENABLE)
-    type="*/*"
-    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-   }
-   startActivityForResult(intent,backupPickCode)
-  }
-  button("🕘 Historiku i skanimeve") {
-   val history=getSharedPreferences("scan_history",MODE_PRIVATE).getString("recent","Nuk ka skanime të përfunduara.")
-   result.text=history
-  }
-  result=TextView(this).apply { setTextColor(Color.WHITE); textSize=15f; setPadding(0,20,0,12) }
-  container.addView(result)
-  text("🛡️ HTML Project Guardian: skedarët index.html dhe versionet e ndryshme nuk fshihen automatikisht.")
-  text("📸 Duplikatet identike identifikohen me SHA-256. Fotografitë e ngjashme kërkojnë analizë tjetër.")
-  text("♻️ Smart Backup kopjon një skedar të zgjedhur. Email Cleaner dhe AI janë ende në zhvillim.")
+  container.addView(tools)
+  val output=card()
+  output.addView(label("REZULTATET E ANALIZËS",13f,Color.rgb(65,224,226),true))
+  result=label("Zgjidh Smart Scan për të filluar analizën.",14f,Color.rgb(207,225,238))
+  result.setPadding(0,dp(10),0,dp(8))
+  output.addView(result)
+  container.addView(output)
+  container.addView(label("🔒 Nuk fshihen skedarë automatikisht. Projektet HTML mbrohen.",12f,Color.rgb(147,177,202)))
   setContentView(root)
  }
- private fun title(s:String){ val v=TextView(this).apply { text=s; textSize=29f; setTextColor(Color.CYAN); setTypeface(null,Typeface.BOLD); setPadding(0,0,0,20) }; container.addView(v) }
- private fun text(s:String){ val v=TextView(this).apply { text=s; textSize=16f; setTextColor(Color.WHITE); setPadding(0,12,0,12) }; container.addView(v) }
- private fun button(s:String, click:()->Unit){ val b=Button(this).apply { text=s; setOnClickListener { click() } }; container.addView(b) }
  override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
   super.onActivityResult(requestCode,resultCode,data)
   if(resultCode!=RESULT_OK) return
