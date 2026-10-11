@@ -15,6 +15,10 @@ import java.security.MessageDigest
 
 class MainActivity : Activity() {
  private val mediaPermissionCode = 201
+ private val deleteRequestCode = 202
+ private val selectedMedia=linkedSetOf<Uri>()
+ private val mediaCandidates=mutableListOf<Pair<Uri,String>>()
+ private lateinit var candidatesList: LinearLayout
  private val pickerCode = 101
  private val exportCode = 102
  private val backupPickCode = 103
@@ -96,7 +100,10 @@ class MainActivity : Activity() {
    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
    startActivityForResult(i,pickerCode)
   }
-  action(tools,"🧾","Kandidatët për pastrim","Vetëm sugjerime, pa fshirje automatike"){
+  action(tools,"🗑️","Zgjidh dhe fshi duplikatet","Shiko listën, selekto dhe konfirmo fshirjen"){ showCandidates() }
+  action(tools,"📸","Screenshot-et","Shiko fotografitë e ekranit për përzgjedhje"){ showScreenshots() }
+  action(tools,"📦","Aplikacionet e instaluara","Zgjidh aplikacionin për çinstalim"){ showInstalledApps() }
+  action(tools,"🧾","Raporti i kandidatëve","Shiko listën pa fshirje"){
    result.text=if(cleanupCandidates.isEmpty()) "Së pari skano një dosje. Nuk ka kandidatë të identifikuar."
     else "Duplikate identike (skedarët e projekteve janë përjashtuar):\n"+cleanupCandidates.take(80).joinToString("\n") { "• "+it.second }+"\n\nAsnjë skedar nuk është fshirë."
   }
@@ -128,8 +135,72 @@ class MainActivity : Activity() {
   result.setPadding(0,dp(10),0,dp(8))
   output.addView(result)
   container.addView(output)
+  candidatesList=card()
+  container.addView(candidatesList)
   container.addView(label("🔒 Nuk fshihen skedarë automatikisht. Projektet HTML mbrohen.",12f,Color.rgb(147,177,202)))
   setContentView(root)
+ }
+ private fun showSelection(items:List<Pair<Uri,String>>,heading:String){
+  selectedMedia.clear();candidatesList.removeAllViews()
+  candidatesList.addView(label(heading,16f,Color.rgb(61,222,226),true))
+  if(items.isEmpty()){ candidatesList.addView(label("Nuk ka skedarë të listuar. Skano telefonin fillimisht.",13f));return }
+  for((uri,name) in items.take(300)){
+   val check=CheckBox(this).apply {
+    text=name; textSize=13f; setTextColor(Color.WHITE);buttonTintList=android.content.res.ColorStateList.valueOf(Color.CYAN)
+    setOnCheckedChangeListener { _,checked->if(checked)selectedMedia.add(uri) else selectedMedia.remove(uri) }
+   }
+   candidatesList.addView(check)
+  }
+  action(candidatesList,"🗑️","FSHI TË ZGJEDHURAT","Kërkohet miratimi i Android-it"){confirmDelete()}
+ }
+ private fun showCandidates(){showSelection(mediaCandidates,"Duplikatet e medias")}
+ private fun showScreenshots(){
+  val screenshots=mutableListOf<Pair<Uri,String>>()
+  try{
+   val base=android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+   val projection=arrayOf(android.provider.MediaStore.MediaColumns._ID,android.provider.MediaStore.MediaColumns.DISPLAY_NAME,android.provider.MediaStore.Images.Media.RELATIVE_PATH)
+   contentResolver.query(base,projection,null,null,null)?.use{cursor->
+    while(cursor.moveToNext()&&screenshots.size<300){
+     val name=cursor.getString(1)?:""
+     val path=cursor.getString(2)?:""
+     if(name.contains("screenshot",true)||path.contains("screenshot",true))
+      screenshots.add(android.content.ContentUris.withAppendedId(base,cursor.getLong(0)) to name)
+    }
+   }
+  }catch(_:Exception){}
+  showSelection(screenshots,"Screenshot-et (zgjidh për fshirje)")
+ }
+ private fun confirmDelete(){
+  val uris=selectedMedia.toList()
+  if(uris.isEmpty()){Toast.makeText(this,"Zgjidh të paktën një skedar",Toast.LENGTH_SHORT).show();return}
+  android.app.AlertDialog.Builder(this).setTitle("Konfirmo fshirjen")
+   .setMessage("Të kërkohet fshirja e ${uris.size} skedarëve të zgjedhur. Android do të kërkojë miratimin përfundimtar.")
+   .setNegativeButton("Anulo",null).setPositiveButton("Vazhdo"){_,_->
+    try{
+     if(android.os.Build.VERSION.SDK_INT>=30){
+      val pending=android.provider.MediaStore.createDeleteRequest(contentResolver,uris)
+      startIntentSenderForResult(pending.intentSender,deleteRequestCode,null,0,0,0)
+     }else Toast.makeText(this,"Fshirja në grup kërkon Android 11+",Toast.LENGTH_LONG).show()
+    }catch(e:Exception){Toast.makeText(this,"Fshirja nuk u nis: ${e.message}",Toast.LENGTH_LONG).show()}
+   }.show()
+ }
+ private fun showInstalledApps(){
+  candidatesList.removeAllViews()
+  candidatesList.addView(label("Aplikacionet – çinstalim me miratimin tënd",16f,Color.CYAN,true))
+  val apps=packageManager.getInstalledApplications(0)
+   .filter { it.packageName!=packageName && it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM==0 }
+   .sortedBy { packageManager.getApplicationLabel(it).toString().lowercase() }
+  for(app in apps.take(150)){
+   val appName=packageManager.getApplicationLabel(app).toString()
+   action(candidatesList,"📦",appName,"Çinstalo përmes Android-it"){
+    android.app.AlertDialog.Builder(this).setTitle("Çinstalo $appName?")
+     .setMessage("Android do të kërkojë konfirmimin tënd.")
+     .setNegativeButton("Anulo",null).setPositiveButton("Vazhdo"){_,_->
+      startActivity(Intent(Intent.ACTION_DELETE,Uri.parse("package:"+app.packageName)))
+     }.show()
+   }
+  }
+  if(apps.isEmpty()) candidatesList.addView(label("Nuk u gjetën aplikacione të dukshme.",13f))
  }
  private fun startPhoneScan(){
   val permissions=if(android.os.Build.VERSION.SDK_INT>=33)
@@ -190,6 +261,7 @@ class MainActivity : Activity() {
     "\\n\\nAsgjë nuk është fshirë. Dokumentet dhe dosjet e mbrojtura nga Android kërkojnë zgjedhje të veçantë."
    runOnUiThread {
     cleanupCandidates.clear();cleanupCandidates.addAll(candidates)
+    mediaCandidates.clear();mediaCandidates.addAll(candidates)
     lastReport=message;result.text=message
     val prefs=getSharedPreferences("scan_history",MODE_PRIVATE)
     val now=java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.getDefault()).format(java.util.Date())
