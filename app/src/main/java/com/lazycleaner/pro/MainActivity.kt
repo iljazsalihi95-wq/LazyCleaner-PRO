@@ -166,7 +166,24 @@ class MainActivity : Activity() {
     setOnCheckedChangeListener { _,checked->if(checked)selectedMedia.add(uri) else selectedMedia.remove(uri) }
    }
    if(check.isChecked) selectedMedia.add(uri)
-   checks.add(check);candidatesList.addView(check)
+   val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=android.view.Gravity.CENTER_VERTICAL }
+   val thumb=ImageView(this).apply {
+    scaleType=ImageView.ScaleType.CENTER_CROP
+    setImageResource(android.R.drawable.ic_menu_gallery)
+    setOnClickListener {
+     val full=ImageView(this@MainActivity).apply { setImageURI(uri); adjustViewBounds=true; scaleType=ImageView.ScaleType.FIT_CENTER }
+     android.app.AlertDialog.Builder(this@MainActivity).setTitle(name).setView(full).setPositiveButton("Mbyll",null).show()
+    }
+   }
+   row.addView(thumb,LinearLayout.LayoutParams(dp(72),dp(72)).apply { rightMargin=dp(10) })
+   row.addView(check,LinearLayout.LayoutParams(0,-2,1f))
+   checks.add(check);candidatesList.addView(row)
+   Thread {
+    try {
+     val bitmap=contentResolver.loadThumbnail(uri,android.util.Size(144,144),null)
+     runOnUiThread { thumb.setImageBitmap(bitmap) }
+    } catch (_:Exception) {}
+   }.start()
   }
   action(candidatesList,"☑","ZGJIDH TË GJITHA","Përzgjedh të gjithë kandidatët e shfaqur"){checks.forEach { it.isChecked=true }}
   action(candidatesList,"↩","HIQ PËRZGJEDHJEN","Lë gjithçka pa shënuar"){checks.forEach { it.isChecked=false }}
