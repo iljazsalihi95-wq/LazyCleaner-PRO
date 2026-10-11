@@ -16,6 +16,10 @@ import java.security.MessageDigest
 class MainActivity : Activity() {
  private val mediaPermissionCode = 201
  private val deleteRequestCode = 202
+ private val uninstallRequestCode = 203
+ private val uninstallQueue=mutableListOf<String>()
+ private var pendingUninstall:String?=null
+ private val pendingTrash=mutableListOf<Uri>()
  private val selectedMedia=linkedSetOf<Uri>()
  private val mediaDates=mutableMapOf<Uri,Long>()
  private val verifiedDuplicates=linkedSetOf<Uri>()
@@ -220,6 +224,7 @@ class MainActivity : Activity() {
     try{
      if(android.os.Build.VERSION.SDK_INT>=30){
       val batch=uris.take(100)
+      pendingTrash.clear();pendingTrash.addAll(batch)
       val pending=android.provider.MediaStore.createTrashRequest(contentResolver,batch,true)
       startIntentSenderForResult(pending.intentSender,deleteRequestCode,null,0,0,0)
       if(uris.size>batch.size) Toast.makeText(this,"Po trajtohen 100 të parat. Përsërite për të tjerat.",Toast.LENGTH_LONG).show()
@@ -238,26 +243,53 @@ class MainActivity : Activity() {
   val usage=usageManager.queryUsageStats(android.app.usage.UsageStatsManager.INTERVAL_DAILY,end-30L*86400000,end)
   val lastUsed=usage.orEmpty().groupBy{it.packageName}.mapValues{entry->entry.value.maxOfOrNull{it.lastTimeUsed}?:0L}
   val hasUsageAccess=!usage.isNullOrEmpty()
-
   candidatesList.removeAllViews()
-  candidatesList.addView(label("Aplikacionet – çinstalim me miratimin tënd",16f,Color.CYAN,true))
+  candidatesList.addView(label("Aplikacionet – zgjidh dhe çinstalo",16f,Color.CYAN,true))
+  candidatesList.addView(label("Android kërkon miratim për çdo aplikacion. Nuk hiqen aplikacionet e sistemit.",12f))
   val apps=packageManager.getInstalledApplications(0)
    .filter { it.packageName!=packageName && (it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM)==0 }
    .sortedBy { packageManager.getApplicationLabel(it).toString().lowercase() }
-  if(!hasUsageAccess) action(candidatesList,"🔐","Lejo statistikat e përdorimit","Për të identifikuar aplikacionet e papërdorura"){startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS))}
+  if(!hasUsageAccess) action(candidatesList,"🔐","Lejo statistikat e përdorimit","Për rekomandime më të sakta"){startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS))}
+  val selected=linkedSetOf<String>()
+  val checks=mutableListOf<CheckBox>()
   for(app in apps.take(150)){
    val appName=packageManager.getApplicationLabel(app).toString()
    val last=lastUsed[app.packageName]?:0L
-   val detail=if(!hasUsageAccess)"Çinstalo përmes Android-it" else if(last==0L)"Nuk figuron i përdorur në 30 ditë" else "Përdorur "+((end-last)/86400000)+" ditë më parë"
-   action(candidatesList,"📦",appName,detail){
-    android.app.AlertDialog.Builder(this).setTitle("Çinstalo $appName?")
-     .setMessage("Android do të kërkojë konfirmimin tënd.")
-     .setNegativeButton("Anulo",null).setPositiveButton("Vazhdo"){_,_->
-      startActivity(Intent(Intent.ACTION_DELETE,Uri.parse("package:"+app.packageName)))
-     }.show()
+   val detail=if(!hasUsageAccess)"Nuk ka statistika përdorimi" else if(last==0L)"Pa përdorim të regjistruar në 30 ditë" else "Përdorur "+((end-last)/86400000)+" ditë më parë"
+   val check=CheckBox(this).apply {
+    text=appName+"\\n"+detail
+    textSize=14f
+    setTextColor(Color.WHITE)
+    setOnCheckedChangeListener { _,checked->if(checked)selected.add(app.packageName) else selected.remove(app.packageName) }
    }
+   checks.add(check);candidatesList.addView(check)
+  }
+  action(candidatesList,"☑","Përzgjidh të papërdorurat","Vetëm sipas statistikave të disponueshme"){
+   if(hasUsageAccess) apps.take(150).forEachIndexed { index,app ->
+    checks[index].isChecked=(lastUsed[app.packageName]?:0L)==0L
+   } else Toast.makeText(this,"Lejo statistikat fillimisht",Toast.LENGTH_LONG).show()
+  }
+  action(candidatesList,"↩","Hiq përzgjedhjen","Mos çinstalo asgjë"){checks.forEach { it.isChecked=false }}
+  action(candidatesList,"🗑️","ÇINSTALO TË ZGJEDHURAT","Android do të kërkojë miratim për secilin"){
+   if(selected.isEmpty()) Toast.makeText(this,"Zgjidh aplikacionet",Toast.LENGTH_LONG).show()
+   else android.app.AlertDialog.Builder(this).setTitle("Çinstalo ${selected.size} aplikacione?")
+    .setMessage("Aplikacionet mund të përmbajnë të dhëna personale. Çdo çinstalim kërkon miratim veçmas.")
+    .setNegativeButton("Anulo",null).setPositiveButton("Vazhdo"){_,_->
+     uninstallQueue.clear();uninstallQueue.addAll(selected);uninstallNext()
+    }.show()
   }
   if(apps.isEmpty()) candidatesList.addView(label("Nuk u gjetën aplikacione të dukshme.",13f))
+ }
+ private fun uninstallNext(){
+  if(uninstallQueue.isEmpty()){pendingUninstall=null;showInstalledApps();return}
+  val pkg=uninstallQueue.removeAt(0)
+  pendingUninstall=pkg
+  try{
+   startActivityForResult(Intent(Intent.ACTION_DELETE,Uri.parse("package:"+pkg)),uninstallRequestCode)
+  }catch(e:Exception){
+   result.text="Çinstalimi nuk u nis: ${e.message}"
+   uninstallQueue.clear();pendingUninstall=null
+  }
  }
  private fun startPhoneScan(){
   val permissions=if(android.os.Build.VERSION.SDK_INT>=33)
@@ -333,12 +365,24 @@ class MainActivity : Activity() {
   }.start()
  }
  override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
+  if(requestCode==uninstallRequestCode){
+   val pkg=pendingUninstall
+   val stillInstalled=if(pkg==null) false else try{
+    packageManager.getPackageInfo(pkg,0);true
+   }catch(_:android.content.pm.PackageManager.NameNotFoundException){false}
+   result.text=if(stillInstalled)"Aplikacioni $pkg është ende i instaluar." else "Çinstalimi i $pkg u verifikua."
+   if(stillInstalled) uninstallQueue.clear()
+   uninstallNext()
+   return
+  }
   if(requestCode==deleteRequestCode){
    if(resultCode==RESULT_OK){
-    result.text="Android miratoi zhvendosjen në kosh. Kryej një skanim të ri për rezultatet aktuale."
+    val count=pendingTrash.size
+    result.text="Android miratoi kërkesën për $count skedarë. Kontrollo koshin e Galerisë/My Files; hapësira mund të mos lirohet derisa koshi të zbrazet."
     selectedMedia.clear()
     candidatesList.removeAllViews()
    }else result.text="Pastrimi u anulua. Nuk u ndryshua asgjë."
+   pendingTrash.clear()
    return
   }
   super.onActivityResult(requestCode,resultCode,data)
