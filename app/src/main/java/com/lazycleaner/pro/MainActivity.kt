@@ -108,6 +108,7 @@ class MainActivity : Activity() {
   }
   action(tools,"🗑️","Zgjidh dhe fshi duplikatet","Shiko listën, selekto dhe konfirmo fshirjen"){ showCandidates() }
   action(tools,"📸","Screenshot-et","Shiko fotografitë e ekranit për përzgjedhje"){ showScreenshots() }
+  action(tools,"🚀","Process Manager • RAM","Shiko RAM-in real dhe menaxho aplikacionet"){ showProcessManager() }
   action(tools,"📦","Aplikacionet e instaluara","Zgjidh aplikacionin për çinstalim"){ showInstalledApps() }
   action(tools,"🧾","Raporti i kandidatëve","Shiko listën pa fshirje"){
    result.text=if(cleanupCandidates.isEmpty()) "Shtyp SKANO TELEFONIN për të analizuar median."
@@ -236,6 +237,33 @@ class MainActivity : Activity() {
       .setMessage(detail+"\nNuk është fshirë asgjë.").setPositiveButton("OK",null).show()
     }
    }.show()
+ }
+ private fun showProcessManager(){
+  val manager=getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+  val memory=android.app.ActivityManager.MemoryInfo()
+  manager.getMemoryInfo(memory)
+  val total=memory.totalMem
+  val available=memory.availMem
+  val used=(total-available).coerceAtLeast(0L)
+  val percent=if(total>0) (used*100.0/total) else 0.0
+  val gb=1073741824.0
+  candidatesList.removeAllViews()
+  candidatesList.addView(label("🚀 PROCESS MANAGER",20f,Color.CYAN,true))
+  candidatesList.addView(label("Gjendja reale e memories RAM",13f,Color.rgb(170,202,226)))
+  candidatesList.addView(label("%.1f%% RAM i përdorur".format(percent),26f,Color.WHITE,true))
+  candidatesList.addView(label("%.2f GB RAM i lirë".format(available/gb),22f,Color.rgb(64,224,210),true))
+  candidatesList.addView(label("%.2f GB RAM gjithsej".format(total/gb),13f))
+  val progress=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply{
+   max=1000
+   this.progress=(percent*10).toInt().coerceIn(0,1000)
+  }
+  candidatesList.addView(progress,LinearLayout.LayoutParams(-1,dp(12)).apply{topMargin=dp(12);bottomMargin=dp(12)})
+  candidatesList.addView(label("Android menaxhon vetë proceset në sfond. Një aplikacion i zakonshëm nuk mund të mbyllë në mënyrë të sigurt të gjitha proceset e tjera.",13f,Color.rgb(170,202,226)))
+  action(candidatesList,"🔄","RIFRESKO RAM-IN","Lexo përsëri statistikat"){showProcessManager()}
+  action(candidatesList,"📦","MENAXHO APLIKACIONET","Zgjidh aplikacionet për çinstalim"){showInstalledApps()}
+  action(candidatesList,"⚙️","HAP CILËSIMET E APLIKACIONEVE","Kontrollo aplikacionet që konsumojnë burime"){
+   startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_SETTINGS))
+  }
  }
  private fun showInstalledApps(){
   val usageManager=getSystemService(android.content.Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
