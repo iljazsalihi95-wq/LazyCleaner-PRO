@@ -109,10 +109,10 @@ class MainActivity : Activity() {
     paint.color=Color.rgb(44,221,237)
     canvas.drawArc(bounds,-90f,360f*fraction,false,paint)
    }
-   fun setFraction(value:Float){fraction=value.coerceIn(0f,1f);invalidate()}
+   fun updateRingProgress(value:Float){fraction=value.coerceIn(0f,1f);invalidate()}
   }
   circle.addView(ringView,android.widget.FrameLayout.LayoutParams(dp(240),dp(240),android.view.Gravity.CENTER))
-  ringUpdater={ value -> ringView.setFraction(value) }
+  ringUpdater={ value -> ringView.updateRingProgress(value) }
   val center=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=android.view.Gravity.CENTER}
   liveStatus=label("GATI PËR SKANIM",19f,Color.WHITE,true).apply{gravity=android.view.Gravity.CENTER}
   liveMetric=label("0 skedarë të analizuar",13f,Color.rgb(166,214,233)).apply{gravity=android.view.Gravity.CENTER}
