@@ -41,9 +41,46 @@ class MainActivity : Activity() {
  private var latestScanFolder: Uri? = null
  private lateinit var result: TextView
  private lateinit var container: LinearLayout
+ private val phoneLanguage:String get()=resources.configuration.locales.get(0).language.lowercase(java.util.Locale.ROOT)
+ private val translations=mapOf(
+   "GATI PËR SKANIM" to listOf("READY TO SCAN","BEREIT ZUM SCANNEN","PRONTO PER LA SCANSIONE"),
+   "0 skedarë të analizuar" to listOf("0 files analyzed","0 Dateien analysiert","0 file analizzati"),
+   "SKANO LIVE" to listOf("SCAN LIVE","LIVE SCANNEN","SCANSIONE LIVE"),
+   "Analizo median dhe gjej kopjet e tepërta" to listOf("Analyze media and find duplicate copies","Medien analysieren und Duplikate finden","Analizza i media e trova i duplicati"),
+   "HAPËSIRA E TELEFONIT" to listOf("PHONE STORAGE","TELEFONSPEICHER","MEMORIA TELEFONO"),
+   "MJETET E PASTRIMIT" to listOf("CLEANUP TOOLS","BEREINIGUNGSWERKZEUGE","STRUMENTI DI PULIZIA"),
+   "SKANO TELEFONIN" to listOf("SCAN PHONE","TELEFON SCANNEN","SCANSIONA TELEFONO"),
+   "Skanon median pa zgjedhur dosje" to listOf("Scan media without selecting folders","Medien ohne Ordnerauswahl scannen","Scansiona i media senza scegliere cartelle"),
+   "Skano një dosje" to listOf("Scan a folder","ORDNER SCANNEN","Scansiona una cartella"),
+   "Vetëm nën-dosje të lejuara nga Android" to listOf("Only folders allowed by Android","Nur von Android erlaubte Ordner","Solo cartelle consentite da Android"),
+   "Zgjidh dhe fshi duplikatet" to listOf("Review duplicates","DUPLIKATE PRÜFEN","Controlla i duplicati"),
+   "Shiko listën, selekto dhe konfirmo fshirjen" to listOf("Review, select and confirm removal","Ansehen, auswählen und Löschen bestätigen","Visualizza, seleziona e conferma"),
+   "Screenshot-et" to listOf("Screenshots","SCREENSHOTS","Screenshot"),
+   "Shiko fotografitë e ekranit për përzgjedhje" to listOf("Review screenshots before removal","Screenshots vor dem Löschen prüfen","Controlla gli screenshot prima di eliminarli"),
+   "Kompreso fotografitë" to listOf("Compress photos","FOTOS KOMPRIMIEREN","Comprimi foto"),
+   "Fotografi reale, pa screenshot-e; origjinalet ruhen" to listOf("Real photos only; originals are preserved","Nur Fotos; Originale bleiben erhalten","Solo foto; originali conservati"),
+   "Shiko RAM-in real dhe menaxho aplikacionet" to listOf("View actual RAM and manage apps","RAM anzeigen und Apps verwalten","Visualizza RAM e gestisci app"),
+   "Aplikacionet e instaluara" to listOf("Installed apps","INSTALLIERTE APPS","App installate"),
+   "Raporti i kandidatëve" to listOf("Scan report","SCANBERICHT","Rapporto scansione"),
+   "Smart Backup" to listOf("Smart Backup","SMART BACKUP","Backup intelligente"),
+   "Eksporto raportin" to listOf("Export report","BERICHT EXPORTIEREN","Esporta rapporto"),
+   "Dosja e fundit" to listOf("Last folder","LETZTER ORDNER","Ultima cartella"),
+   "Historiku" to listOf("History","VERLAUF","Cronologia"),
+   "ZGJIDH TË GJITHA" to listOf("SELECT ALL","ALLE AUSWÄHLEN","SELEZIONA TUTTO"),
+   "HIQ PËRZGJEDHJEN" to listOf("DESELECT ALL","AUSWAHL AUFHEBEN","DESELEZIONA TUTTO"),
+   "KALO NË KOSH TË ZGJEDHURAT" to listOf("MOVE SELECTED TO TRASH","AUSWAHL IN PAPIERKORB","SPOSTA SELEZIONATI NEL CESTINO"),
+   "ZGJIDH VETËM DUPLIKATET" to listOf("SELECT VERIFIED DUPLICATES","NUR BESTÄTIGTE DUPLIKATE","SELEZIONA SOLO DUPLICATI"),
+   "SKANIMI PËRFUNDOI" to listOf("SCAN COMPLETE","SCAN ABGESCHLOSSEN","SCANSIONE COMPLETATA"),
+   "DUKE SKANUAR..." to listOf("SCANNING...","SCAN LÄUFT...","SCANSIONE IN CORSO..."),
+   "DUKE KRAHASUAR..." to listOf("COMPARING...","VERGLEICH LÄUFT...","CONFRONTO IN CORSO...")
+ )
+ private fun tr(source:String):String {
+  val index=when(phoneLanguage){"en"->0;"de"->1;"it"->2;else->-1}
+  return if(index<0)source else translations[source]?.get(index)?:source
+ }
  private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
  private fun label(s:String,size:Float=15f,color:Int=Color.WHITE,bold:Boolean=false):TextView =
-  TextView(this).apply { text=s; textSize=size; setTextColor(color); if(bold)setTypeface(null,Typeface.BOLD); gravity=android.view.Gravity.CENTER_VERTICAL }
+  TextView(this).apply { text=tr(s); textSize=size; setTextColor(color); if(bold)setTypeface(null,Typeface.BOLD); gravity=android.view.Gravity.CENTER_VERTICAL }
  private fun card():LinearLayout = LinearLayout(this).apply {
   orientation=LinearLayout.VERTICAL; setPadding(dp(16),dp(14),dp(16),dp(14))
   background=android.graphics.drawable.GradientDrawable().apply {
@@ -63,8 +100,8 @@ class MainActivity : Activity() {
   }
   row.addView(label(icon,24f),LinearLayout.LayoutParams(dp(44),dp(46)))
   val content=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
-  content.addView(label(title,15f,Color.WHITE,true))
-  content.addView(label(detail,12f,Color.rgb(166,193,219)))
+  content.addView(label(tr(title),15f,Color.WHITE,true))
+  content.addView(label(tr(detail),12f,Color.rgb(166,193,219)))
   row.addView(content,LinearLayout.LayoutParams(0,-2,1f))
   row.addView(label("›",26f,Color.rgb(52,220,232)))
   parent.addView(row)
@@ -446,7 +483,7 @@ class MainActivity : Activity() {
  private fun scanPhoneMedia(){
   if(scanRunning)return
   scanRunning=true
-  liveStatus.text="DUKE SKANUAR..."
+  liveStatus.text=tr("DUKE SKANUAR...")
   liveMetric.text="Po numërohen skedarët"
   ringUpdater?.invoke(0.02f)
   result.text="Duke analizuar median e telefonit…"
@@ -485,7 +522,7 @@ class MainActivity : Activity() {
    val possible=groupedBySize.values.filter{it.size>1}.flatten()
    val workCount=possible.size
    runOnUiThread{
-    liveStatus.text="DUKE KRAHASUAR..."
+    liveStatus.text=tr("DUKE KRAHASUAR...")
     liveMetric.text="$total skedarë u numëruan • $workCount kandidatë"
     ringUpdater?.invoke(if(workCount==0)1f else 0.05f)
    }
@@ -520,7 +557,7 @@ class MainActivity : Activity() {
     verifiedDuplicates.clear();verifiedDuplicates.addAll(candidates.map { it.first })
     scanRunning=false
     ringUpdater?.invoke(1f)
-    liveStatus.text="SKANIMI PËRFUNDOI"
+    liveStatus.text=tr("SKANIMI PËRFUNDOI")
     liveMetric.text="$total skedarë • ${candidates.size} kopje të tepërta"
     lastReport=message;result.text=message
     showSelection(candidates,"Duplikate identike: ${candidates.size} kopje të tepërta",true)
