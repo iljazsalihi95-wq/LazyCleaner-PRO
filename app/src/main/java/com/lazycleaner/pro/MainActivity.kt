@@ -446,33 +446,53 @@ class MainActivity : Activity() {
     android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
     android.provider.MediaStore.MediaColumns.SIZE,
     android.provider.MediaStore.MediaColumns.DATE_MODIFIED)
+   val groupedBySize=mutableMapOf<Long,MutableList<Triple<Uri,String,Long>>>()
    for(base in collections){
-    try {
-     contentResolver.query(base,projection,null,null,null)?.use { cursor ->
+    try{
+     contentResolver.query(base,projection,null,null,null)?.use{cursor->
       val idColumn=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns._ID)
       val nameColumn=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)
       val sizeColumn=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.SIZE)
       val dateColumn=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DATE_MODIFIED)
       while(cursor.moveToNext() && total<20000){
        val id=cursor.getLong(idColumn)
-       val name=cursor.getString(nameColumn) ?: "media"
-       val size=if(cursor.isNull(sizeColumn)) 0L else cursor.getLong(sizeColumn)
+       val name=cursor.getString(nameColumn)?:"media"
+       val size=if(cursor.isNull(sizeColumn))0L else cursor.getLong(sizeColumn)
        val file=android.content.ContentUris.withAppendedId(base,id)
-       mediaDates[file]=if(cursor.isNull(dateColumn)) 0L else cursor.getLong(dateColumn)
+       val date=if(cursor.isNull(dateColumn))0L else cursor.getLong(dateColumn)
+       mediaDates[file]=date
        total++;bytes+=size
-       if(total%100==0){val count=total;runOnUiThread {liveMetric.text="$count skedarë të analizuar";ringUpdater?.invoke((count/20000f).coerceAtMost(0.95f))}}
-       try {
-        val md=MessageDigest.getInstance("SHA-256")
-        contentResolver.openInputStream(file)?.use { input ->
-         val buf=ByteArray(32768)
-         while(true){val n=input.read(buf);if(n<0)break;md.update(buf,0,n)}
-         val digest=md.digest().joinToString("") { "%02x".format(it) }
-         hashes.getOrPut(digest){mutableListOf()}.add(file to name)
-        }
-       }catch (_:Exception){errors++}
+       if(size>0L)groupedBySize.getOrPut(size){mutableListOf()}.add(Triple(file,name,date))
       }
      }
-    }catch (_:Exception){errors++}
+    }catch(_:Exception){errors++}
+   }
+   val possible=groupedBySize.values.filter{it.size>1}.flatten()
+   val workCount=possible.size
+   runOnUiThread{
+    liveStatus.text="DUKE KRAHASUAR..."
+    liveMetric.text="$total skedarë u numëruan • $workCount kandidatë"
+    ringUpdater?.invoke(if(workCount==0)1f else 0.05f)
+   }
+   var processed=0
+   for((file,name,_) in possible){
+    try{
+     val md=MessageDigest.getInstance("SHA-256")
+     contentResolver.openInputStream(file)?.use{input->
+      val buf=ByteArray(65536)
+      while(true){val n=input.read(buf);if(n<0)break;md.update(buf,0,n)}
+      val digest=md.digest().joinToString(""){"%02x".format(it)}
+      hashes.getOrPut(digest){mutableListOf()}.add(file to name)
+     } ?: run{errors++}
+    }catch(_:Exception){errors++}
+    processed++
+    if(processed%10==0||processed==workCount){
+     val done=processed
+     runOnUiThread{
+      liveMetric.text="$done / $workCount kandidatë të krahasuar"
+      ringUpdater?.invoke(if(workCount==0)1f else (0.05f+0.95f*done/workCount).coerceAtMost(1f))
+     }
+    }
    }
    val duplicates=hashes.values.filter { it.size>1 }
    val candidates=duplicates.flatMap { group -> group.sortedWith(compareByDescending<Pair<Uri,String>> { mediaDates[it.first] ?: 0L }.thenBy { it.second }).drop(1) }
