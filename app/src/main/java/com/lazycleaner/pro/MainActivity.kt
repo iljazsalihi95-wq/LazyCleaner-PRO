@@ -238,17 +238,32 @@ class MainActivity : Activity() {
   val screenshots=mutableListOf<Pair<Uri,String>>()
   try{
    val base=android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-   val projection=arrayOf(android.provider.MediaStore.MediaColumns._ID,android.provider.MediaStore.MediaColumns.DISPLAY_NAME,android.provider.MediaStore.Images.Media.RELATIVE_PATH)
-   contentResolver.query(base,projection,null,null,null)?.use{cursor->
+   val projection=arrayOf(android.provider.MediaStore.MediaColumns._ID,
+    android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+    android.provider.MediaStore.Images.Media.RELATIVE_PATH,
+    android.provider.MediaStore.MediaColumns.DATE_MODIFIED)
+   contentResolver.query(base,projection,null,null,
+    android.provider.MediaStore.MediaColumns.DATE_MODIFIED+" DESC")?.use{cursor->
+    val idCol=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns._ID)
+    val nameCol=cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)
+    val pathCol=cursor.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media.RELATIVE_PATH)
     while(cursor.moveToNext()&&screenshots.size<300){
-     val name=cursor.getString(1)?:""
-     val path=cursor.getString(2)?:""
-     if(name.contains("screenshot",true)||path.contains("screenshot",true))
-      screenshots.add(android.content.ContentUris.withAppendedId(base,cursor.getLong(0)) to name)
+     val name=cursor.getString(nameCol)?:""
+     val path=cursor.getString(pathCol)?:""
+     if(name.contains("screenshot",true)||name.contains("screen_shot",true)||path.contains("screenshot",true))
+      screenshots.add(android.content.ContentUris.withAppendedId(base,cursor.getLong(idCol)) to name)
     }
    }
-  }catch(_:Exception){}
-  showSelection(screenshots,"Screenshot-et (zgjidh për fshirje)")
+  }catch(e:Exception){result.text="Screenshot-et nuk u lexuan: ${e.message}"}
+  showSelection(screenshots,"Screenshot-et • ${screenshots.size} për kontroll")
+  if(screenshots.isNotEmpty()){
+   val candidates=screenshots.count{verifiedDuplicates.contains(it.first)}
+   candidatesList.addView(label("Kopje identike të verifikuara: $candidates. Fotot e tjera nuk përzgjidhen automatikisht pa miratimin tënd.",12f,Color.rgb(166,193,219)))
+   action(candidatesList,"🧠","ZGJIDH VETËM DUPLIKATET","Përzgjedh vetëm kopjet e verifikuara nga skanimi"){
+    val duplicates=screenshots.filter{verifiedDuplicates.contains(it.first)}
+    showSelection(duplicates,"Screenshot-e identike • ${duplicates.size} kopje",true)
+   }
+  }
  }
  private fun confirmDelete(){
   val uris=selectedMedia.toList().distinct()
