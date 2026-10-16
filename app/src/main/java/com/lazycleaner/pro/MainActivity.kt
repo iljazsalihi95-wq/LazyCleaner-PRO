@@ -194,6 +194,9 @@ class MainActivity : Activity() {
   action(tools,"🗑️","Zgjidh dhe fshi duplikatet","Shiko listën, selekto dhe konfirmo fshirjen"){ showCandidates() }
   action(tools,"🧺","KU ËSHTË KOSHI?","Hap udhëzimet për koshin e Samsung"){showTrashGuide()}
   action(tools,"📥","SHKARKIMET E VJETRA","Kontrollo Downloads dhe skedarët e mëdhenj"){showDownloadsGuide()}
+  action(tools,"🎬","VIDEO TË MËDHA","Kontrollo videot e mëdha dhe të vjetra"){showMediaReview(true)}
+  action(tools,"🎵","AUDIO TË VJETRA","Kontrollo regjistrimet dhe audiot e vjetra"){showMediaReview(false)}
+  action(tools,"🧽","PASTRIMI I CACHE","Pastro cache-in e LazyCleaner dhe hap cilësimet për aplikacionet e tjera"){showCacheCleanup()}
   action(tools,"📸","Screenshot-et","Shiko fotografitë e ekranit për përzgjedhje"){ showScreenshots() }
   action(tools,"🖼️","Kompreso fotografitë","Fotografi reale, pa screenshot-e; origjinalet ruhen"){ pickPhotosForCompression() }
   action(tools,"🚀","Process Manager • RAM","Shiko RAM-in real dhe menaxho aplikacionet"){ showProcessManager() }
@@ -314,6 +317,51 @@ class MainActivity : Activity() {
     val duplicates=screenshots.filter{verifiedDuplicates.contains(it.first)}
     showSelection(duplicates,"Screenshot-e identike • ${duplicates.size} kopje",true)
    }
+  }
+ }
+ private fun showMediaReview(video:Boolean){
+  val base=if(video)android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI else android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+  val items=mutableListOf<Pair<Uri,String>>()
+  val projection=arrayOf(android.provider.MediaStore.MediaColumns._ID,
+   android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+   android.provider.MediaStore.MediaColumns.SIZE,
+   android.provider.MediaStore.MediaColumns.DATE_MODIFIED)
+  val cutoff=System.currentTimeMillis()/1000L-180L*86400L
+  try{
+   contentResolver.query(base,projection,null,null,android.provider.MediaStore.MediaColumns.SIZE+" DESC")?.use{cursor->
+    while(cursor.moveToNext()&&items.size<200){
+     val size=if(cursor.isNull(2))0L else cursor.getLong(2)
+     val date=if(cursor.isNull(3))0L else cursor.getLong(3)
+     if(size<20L*1048576L&&date>=cutoff)continue
+     val name=cursor.getString(1)?:"media"
+     val uri=android.content.ContentUris.withAppendedId(base,cursor.getLong(0))
+     val age=if(date>0&&date<cutoff)" • mbi 180 ditë" else ""
+     items.add(uri to ("$name • ${size/1048576L} MB"+age))
+    }
+   }
+  }catch(e:Exception){result.text="Nuk u lexuan skedarët: ${e.message}"}
+  showSelection(items,if(video)"Video për kontroll • ${items.size}" else "Audio për kontroll • ${items.size}")
+  if(items.isNotEmpty())candidatesList.addView(label("Nuk fshihet asgjë automatikisht. Kontrollo çdo video ose audio para kalimit në kosh.",13f,Color.rgb(166,193,219)))
+ }
+ private fun showCacheCleanup(){
+  candidatesList.removeAllViews()
+  candidatesList.addView(label("PASTRIMI I CACHE",19f,Color.CYAN,true))
+  candidatesList.addView(label("Android nuk lejon pastrimin e cache-it privat të aplikacioneve të tjera pa ndërhyrjen tënde. Mund të pastrohet cache-i i LazyCleaner.",13f))
+  action(candidatesList,"🧽","PASTRO CACHE-IN E LAZYCLEANER","Fshin vetëm skedarët e përkohshëm të këtij aplikacioni"){
+   fun clean(dir:java.io.File?):Long{
+    if(dir==null||!dir.exists())return 0L
+    var removed=0L
+    dir.listFiles()?.forEach{file->
+     val size=if(file.isDirectory)clean(file) else file.length()
+     if(file.delete())removed+=size
+    }
+    return removed
+   }
+   val bytes=clean(cacheDir)+clean(externalCacheDir)
+   result.text="U pastruan ${bytes/1024} KB nga cache-i i LazyCleaner. Cache-i i aplikacioneve të tjera nuk është prekur."
+  }
+  action(candidatesList,"⚙️","HAP CILËSIMET E APLIKACIONEVE","Zgjidh aplikacionin → Storage → Clear cache"){
+   startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_SETTINGS))
   }
  }
  private fun showTrashGuide(){
