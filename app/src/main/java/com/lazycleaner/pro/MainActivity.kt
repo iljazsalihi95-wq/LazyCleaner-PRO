@@ -22,6 +22,7 @@ class MainActivity : Activity() {
  private val uninstallQueue=mutableListOf<String>()
  private var pendingUninstall:String?=null
  private val pendingTrash=mutableListOf<Uri>()
+ private var pendingTrashBytes=0L
  private val selectedMedia=linkedSetOf<Uri>()
  private val mediaDates=mutableMapOf<Uri,Long>()
  private val verifiedDuplicates=linkedSetOf<Uri>()
@@ -321,6 +322,8 @@ class MainActivity : Activity() {
      if(android.os.Build.VERSION.SDK_INT>=30){
       val batch=uris.take(100)
       pendingTrash.clear();pendingTrash.addAll(batch)
+      pendingTrashBytes=0L
+      for(item in batch){try{contentResolver.query(item,arrayOf(android.provider.MediaStore.MediaColumns.SIZE),null,null,null)?.use{if(it.moveToFirst()&&!it.isNull(0))pendingTrashBytes+=it.getLong(0)}}catch(_:Exception){}}
       val pending=android.provider.MediaStore.createTrashRequest(contentResolver,batch,true)
       startIntentSenderForResult(pending.intentSender,deleteRequestCode,null,0,0,0)
       if(uris.size>batch.size) Toast.makeText(this,"Po trajtohen 100 të parat. Përsërite për të tjerat.",Toast.LENGTH_LONG).show()
@@ -598,11 +601,17 @@ class MainActivity : Activity() {
   if(requestCode==deleteRequestCode){
    if(resultCode==RESULT_OK){
     val count=pendingTrash.size
-    result.text="Android miratoi kërkesën për $count skedarë. Kontrollo koshin e Galerisë/My Files; hapësira mund të mos lirohet derisa koshi të zbrazet."
+    val estimated=pendingTrashBytes/1048576.0
+    result.text="Android miratoi kalimin në kosh për $count skedarë (rreth %.1f MB). Kjo NUK është hapësirë e liruar ende; zbraz koshin për të liruar hapësirën.".format(java.util.Locale.getDefault(),estimated)
     selectedMedia.clear()
     candidatesList.removeAllViews()
+    val prefs=getSharedPreferences("scan_history",MODE_PRIVATE)
+    val now=java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",java.util.Locale.getDefault()).format(java.util.Date())
+    val prev=prefs.getString("recent","")?:""
+    prefs.edit().putString("recent",("$now — Në kosh: $count skedarë, rreth %.1f MB (jo hapësirë e liruar)\\n".format(java.util.Locale.getDefault(),estimated)+prev).lines().take(20).joinToString("\\n")).apply()
    }else result.text="Pastrimi u anulua. Nuk u ndryshua asgjë."
    pendingTrash.clear()
+   pendingTrashBytes=0L
    return
   }
   super.onActivityResult(requestCode,resultCode,data)
