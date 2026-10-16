@@ -113,6 +113,7 @@ class MainActivity : Activity() {
   super.onCreate(savedInstanceState)
   window.statusBarColor=Color.rgb(4,16,34)
   window.navigationBarColor=Color.rgb(4,16,34)
+  window.decorView.systemUiVisibility=0
   val root=ScrollView(this).apply { isFillViewport=true; clipToPadding=false }
   container=LinearLayout(this).apply {
    orientation=LinearLayout.VERTICAL; setPadding(dp(16),dp(18),dp(16),dp(42))
@@ -131,7 +132,13 @@ class MainActivity : Activity() {
   container.addView(header,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(20) })
   val hero=card()
   hero.addView(label("LAZYCLEANER PRO • LIVE",13f,Color.rgb(65,224,226),true))
-  val circle=android.widget.FrameLayout(this)
+  val circle=android.widget.FrameLayout(this).apply{
+   isClickable=true
+   isFocusable=true
+   contentDescription=tr("SKANO LIVE")
+   foreground=android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(Color.argb(75,60,220,235)),null,android.graphics.drawable.GradientDrawable().apply{shape=android.graphics.drawable.GradientDrawable.OVAL;setColor(Color.WHITE)})
+   setOnClickListener { if(!scanRunning)startPhoneScan() else Toast.makeText(this@MainActivity,tr("DUKE SKANUAR..."),Toast.LENGTH_SHORT).show() }
+  }
   liveRing=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {
    max=1000
    progressTintList=android.content.res.ColorStateList.valueOf(Color.rgb(36,218,234))
@@ -159,15 +166,15 @@ class MainActivity : Activity() {
   center.addView(liveStatus);center.addView(liveMetric)
   circle.addView(center,android.widget.FrameLayout.LayoutParams(dp(210),dp(120),android.view.Gravity.CENTER))
   hero.addView(circle,LinearLayout.LayoutParams(-1,dp(252)))
-  action(hero,"🔍","SKANO LIVE","Analizo median dhe gjej kopjet e tepërta"){startPhoneScan()}
+  hero.addView(label("●  "+tr("SKANO LIVE")+"  •  "+tr("Analizo median dhe gjej kopjet e tepërta"),12f,Color.rgb(127,205,228)).apply{gravity=android.view.Gravity.CENTER},LinearLayout.LayoutParams(-1,dp(42)))
   container.addView(hero)
   val stats=StatFs(Environment.getDataDirectory().absolutePath)
   val totalGb=stats.totalBytes.toDouble()/1073741824.0
   val freeGb=stats.availableBytes.toDouble()/1073741824.0
   val storage=card()
   storage.addView(label("HAPËSIRA E TELEFONIT",12f,Color.rgb(127,195,221),true))
-  storage.addView(label("%.1f GB të lira".format(freeGb),27f,Color.WHITE,true))
-  storage.addView(label("Nga %.1f GB gjithsej".format(totalGb),13f,Color.rgb(172,197,218)))
+  storage.addView(label(when(phoneLanguage){"it"->"%.1f GB liberi";"de"->"%.1f GB frei";"en"->"%.1f GB free";else->"%.1f GB të lira"}.format(java.util.Locale.getDefault(),freeGb),27f,Color.WHITE,true))
+  storage.addView(label(when(phoneLanguage){"it"->"Su %.1f GB totali";"de"->"Von insgesamt %.1f GB";"en"->"Of %.1f GB total";else->"Nga %.1f GB gjithsej"}.format(java.util.Locale.getDefault(),totalGb),13f,Color.rgb(172,197,218)))
   val bar=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply {
    max=1000; progress=if(totalGb>0)(((totalGb-freeGb)/totalGb)*1000).toInt().coerceIn(0,1000) else 0
    progressTintList=android.content.res.ColorStateList.valueOf(Color.rgb(45,216,220))
