@@ -14,6 +14,7 @@ import android.widget.*
 import java.security.MessageDigest
 
 class MainActivity : Activity() {
+ private val thumbnailExecutor=java.util.concurrent.Executors.newFixedThreadPool(2)
  private val mediaPermissionCode = 201
  private val deleteRequestCode = 202
  private val uninstallRequestCode = 203
@@ -78,6 +79,7 @@ class MainActivity : Activity() {
   val index=when(phoneLanguage){"en"->0;"de"->1;"it"->2;else->-1}
   return if(index<0)source else translations[source]?.get(index)?:source
  }
+ override fun onDestroy(){ thumbnailExecutor.shutdownNow();super.onDestroy() }
  private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
  private fun label(s:String,size:Float=15f,color:Int=Color.WHITE,bold:Boolean=false):TextView =
   TextView(this).apply { text=tr(s); textSize=size; setTextColor(color); if(bold)setTypeface(null,Typeface.BOLD); gravity=android.view.Gravity.CENTER_VERTICAL }
@@ -259,12 +261,14 @@ class MainActivity : Activity() {
    row.addView(thumb,LinearLayout.LayoutParams(dp(72),dp(72)).apply { rightMargin=dp(10) })
    row.addView(check,LinearLayout.LayoutParams(0,-2,1f))
    checks.add(check);candidatesList.addView(row)
-   Thread {
-    try {
-     val bitmap=contentResolver.loadThumbnail(uri,android.util.Size(144,144),null)
-     runOnUiThread { thumb.setImageBitmap(bitmap) }
-    } catch (_:Exception) {}
-   }.start()
+   if(checks.size<=60){
+    thumbnailExecutor.execute {
+     try{
+      val bitmap=contentResolver.loadThumbnail(uri,android.util.Size(144,144),null)
+      runOnUiThread { if(thumb.isAttachedToWindow)thumb.setImageBitmap(bitmap) else bitmap.recycle() }
+     }catch(_:Exception){}
+    }
+   }
   }
   action(candidatesList,"☑","ZGJIDH TË GJITHA","Përzgjedh të gjithë kandidatët e shfaqur"){checks.forEach { it.isChecked=true }}
   action(candidatesList,"↩","HIQ PËRZGJEDHJEN","Lë gjithçka pa shënuar"){checks.forEach { it.isChecked=false }}
@@ -359,14 +363,25 @@ class MainActivity : Activity() {
       if(it.moveToFirst()) it.getString(0) else "foto"
      } ?: "foto"
      if(name.contains("screenshot",true)||name.contains("screen_shot",true)){skipped++;continue}
-     val originalBytes=contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: continue
-     val bitmap=android.graphics.BitmapFactory.decodeByteArray(originalBytes,0,originalBytes.size) ?: continue
+     val sourceSize=contentResolver.query(uri,arrayOf(android.provider.OpenableColumns.SIZE),null,null,null)?.use{
+      if(it.moveToFirst()&&!it.isNull(0))it.getLong(0) else 0L
+     } ?: 0L
+     if(sourceSize>35L*1024*1024){skipped++;continue}
+     val options=android.graphics.BitmapFactory.Options().apply{inJustDecodeBounds=true}
+     contentResolver.openInputStream(uri)?.use{android.graphics.BitmapFactory.decodeStream(it,null,options)}
+     if(options.outWidth<=0||options.outHeight<=0){skipped++;continue}
+     var sample=1
+     while(options.outWidth/sample>2560||options.outHeight/sample>2560)sample*=2
+     val decodeOptions=android.graphics.BitmapFactory.Options().apply{inSampleSize=sample}
+     val bitmap=contentResolver.openInputStream(uri)?.use{
+      android.graphics.BitmapFactory.decodeStream(it,null,decodeOptions)
+     } ?: continue
      val buffer=java.io.ByteArrayOutputStream()
      bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG,82,buffer)
      val compressed=buffer.toByteArray()
      bitmap.recycle()
-     before+=originalBytes.size
-     if(compressed.size>=originalBytes.size){skipped++;continue}
+     before+=sourceSize
+     if(sourceSize<=0L||compressed.size>=sourceSize){skipped++;continue}
      val values=android.content.ContentValues().apply{
       put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME,"LazyCleaner_"+name.substringBeforeLast('.')+".jpg")
       put(android.provider.MediaStore.MediaColumns.MIME_TYPE,"image/jpeg")
