@@ -192,6 +192,8 @@ class MainActivity : Activity() {
    startActivityForResult(i,pickerCode)
   }
   action(tools,"🗑️","Zgjidh dhe fshi duplikatet","Shiko listën, selekto dhe konfirmo fshirjen"){ showCandidates() }
+  action(tools,"🧺","KU ËSHTË KOSHI?","Hap udhëzimet për koshin e Samsung"){showTrashGuide()}
+  action(tools,"📥","SHKARKIMET E VJETRA","Kontrollo Downloads dhe skedarët e mëdhenj"){showDownloadsGuide()}
   action(tools,"📸","Screenshot-et","Shiko fotografitë e ekranit për përzgjedhje"){ showScreenshots() }
   action(tools,"🖼️","Kompreso fotografitë","Fotografi reale, pa screenshot-e; origjinalet ruhen"){ pickPhotosForCompression() }
   action(tools,"🚀","Process Manager • RAM","Shiko RAM-in real dhe menaxho aplikacionet"){ showProcessManager() }
@@ -312,6 +314,38 @@ class MainActivity : Activity() {
     val duplicates=screenshots.filter{verifiedDuplicates.contains(it.first)}
     showSelection(duplicates,"Screenshot-e identike • ${duplicates.size} kopje",true)
    }
+  }
+ }
+ private fun showTrashGuide(){
+  candidatesList.removeAllViews()
+  candidatesList.addView(label("KOSHI • SAMSUNG",19f,Color.CYAN,true))
+  candidatesList.addView(label("Galeria: hap Gallery → Menu (☰) → Recycle bin / Cestino / Papierkorb.\n\nMy Files: hap My Files / Archivio → Recycle bin / Cestino.\n\nHapësira lirohet vetëm pasi të zbrazet koshi. Kontrollo skedarët para fshirjes përfundimtare.",14f))
+  action(candidatesList,"🗂️","HAP MY FILES","Gjej koshin në menunë e aplikacionit"){
+   val intent=packageManager.getLaunchIntentForPackage("com.sec.android.app.myfiles")
+   if(intent!=null)startActivity(intent)
+   else Toast.makeText(this,"Hap My Files nga lista e aplikacioneve",Toast.LENGTH_LONG).show()
+  }
+  action(candidatesList,"🖼️","HAP GALERINË","Gjej koshin te menuja e Galerisë"){
+   val intent=packageManager.getLaunchIntentForPackage("com.sec.android.gallery3d")
+   if(intent!=null)startActivity(intent)
+   else startActivity(Intent(Intent.ACTION_VIEW).apply{type="image/*";flags=Intent.FLAG_ACTIVITY_NEW_TASK})
+  }
+ }
+ private fun showDownloadsGuide(){
+  candidatesList.removeAllViews()
+  candidatesList.addView(label("PASTRIMI I SHKARKIMEVE",19f,Color.CYAN,true))
+  candidatesList.addView(label("Kontrollo Downloads sipas madhësisë dhe datës. ZIP, APK dhe videot e vjetra shpesh zënë shumë hapësirë. Mos fshi projekte HTML, dokumente ose backup pa kontroll.",14f))
+  action(candidatesList,"📥","HAP DOWNLOADS","Zgjidh dhe fshi vetëm skedarët që nuk të duhen"){
+   try{startActivity(Intent("android.intent.action.VIEW_DOWNLOADS"))}
+   catch(_:Exception){
+    val intent=packageManager.getLaunchIntentForPackage("com.sec.android.app.myfiles")
+    if(intent!=null)startActivity(intent) else Toast.makeText(this,"Hap Downloads te My Files",Toast.LENGTH_LONG).show()
+   }
+  }
+  action(candidatesList,"🔍","SKANO NJË DOSJE","Analizo një dosje të lejuar nga Android"){
+   startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply{
+    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+   },pickerCode)
   }
  }
  private fun confirmDelete(){
