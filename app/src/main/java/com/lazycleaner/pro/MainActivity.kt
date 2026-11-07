@@ -197,6 +197,9 @@ class MainActivity : Activity() {
   action(tools,"🎬","VIDEO TË MËDHA","Kontrollo videot e mëdha dhe të vjetra"){showMediaReview(true)}
   action(tools,"🎵","AUDIO TË VJETRA","Kontrollo regjistrimet dhe audiot e vjetra"){showMediaReview(false)}
   action(tools,"🧽","PASTRIMI I CACHE","Pastro cache-in e LazyCleaner dhe hap cilësimet për aplikacionet e tjera"){showCacheCleanup()}
+  action(tools,"🗑️","KOSHI I MEDIAS","Shiko dhe zbraz me konfirmim skedarët në koshin e Android"){showMediaTrash()}
+  action(tools,"✉️","EMAIL SPAM & REKLAMA","Hap menaxhimin e spam-it në aplikacionin e emailit"){showEmailCleanup()}
+  action(tools,"🛡️","KONTROLL SIGURIE","Kontrollo cilësimet e sigurisë dhe Play Protect"){showSecurityReview()}
   action(tools,"📸","Screenshot-et","Shiko fotografitë e ekranit për përzgjedhje"){ showScreenshots() }
   action(tools,"🖼️","Kompreso fotografitë","Fotografi reale, pa screenshot-e; origjinalet ruhen"){ pickPhotosForCompression() }
   action(tools,"🚀","Process Manager • RAM","Shiko RAM-in real dhe menaxho aplikacionet"){ showProcessManager() }
@@ -363,6 +366,80 @@ class MainActivity : Activity() {
   action(candidatesList,"⚙️","HAP CILËSIMET E APLIKACIONEVE","Zgjidh aplikacionin → Storage → Clear cache"){
    startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_SETTINGS))
   }
+ }
+ private fun showMediaTrash(){
+  candidatesList.removeAllViews()
+  candidatesList.addView(label("KOSHI I MEDIAS • ANDROID",19f,Color.CYAN,true))
+  if(android.os.Build.VERSION.SDK_INT<30){
+   candidatesList.addView(label("Koshi i medias kërkon Android 11 ose më të ri.",13f));return
+  }
+  val found=mutableListOf<Pair<Uri,String>>()
+  val collections=listOf(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+   android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+   android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI)
+  val projection=arrayOf(android.provider.MediaStore.MediaColumns._ID,
+   android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+   android.provider.MediaStore.MediaColumns.SIZE)
+  for(base in collections){
+   try{
+    val args=android.os.Bundle().apply{
+     putInt(android.provider.MediaStore.QUERY_ARG_MATCH_TRASHED,android.provider.MediaStore.MATCH_ONLY)
+    }
+    contentResolver.query(base,projection,args,null)?.use{cursor->
+     while(cursor.moveToNext()&&found.size<200){
+      val name=cursor.getString(1)?:"media"
+      val bytes=if(cursor.isNull(2))0L else cursor.getLong(2)
+      found.add(android.content.ContentUris.withAppendedId(base,cursor.getLong(0)) to "$name • ${bytes/1048576} MB")
+     }
+    }
+   }catch(_:Exception){}
+  }
+  candidatesList.addView(label("U gjetën ${found.size} skedarë në koshin e medias që Android lejon të shihen. Koshat privatë të Samsung Gallery/My Files mund të jenë të veçantë.",13f))
+  if(found.isNotEmpty()){
+   val chosen=linkedSetOf<Uri>()
+   for((uri,name) in found){
+    val check=CheckBox(this).apply{
+     text=name;textSize=13f;setTextColor(Color.WHITE)
+     setOnCheckedChangeListener{_,checked->if(checked)chosen.add(uri) else chosen.remove(uri)}
+    }
+    candidatesList.addView(check)
+   }
+   action(candidatesList,"⚠️","FSHI PËRFUNDIMISHT TË ZGJEDHURAT","Pa rikthim; Android kërkon miratim"){
+    if(chosen.isEmpty())Toast.makeText(this,"Zgjidh skedarët",Toast.LENGTH_SHORT).show()
+    else android.app.AlertDialog.Builder(this).setTitle("Fshirje përfundimtare?")
+     .setMessage("Këta ${chosen.size} skedarë nuk mund të rikthehen nga koshi. Android do të kërkojë miratim.")
+     .setNegativeButton("Anulo",null).setPositiveButton("Vazhdo"){_,_->
+      try{
+       val request=android.provider.MediaStore.createDeleteRequest(contentResolver,chosen.take(100))
+       startIntentSenderForResult(request.intentSender,deleteRequestCode,null,0,0,0)
+      }catch(e:Exception){result.text="Fshirja nuk u nis: ${e.message}"}
+     }.show()
+   }
+  }
+  action(candidatesList,"🗂️","HAP KOSHIN SAMSUNG","Për koshat e Galerisë dhe My Files"){showTrashGuide()}
+ }
+ private fun showEmailCleanup(){
+  candidatesList.removeAllViews()
+  candidatesList.addView(label("EMAIL SPAM & REKLAMA",19f,Color.CYAN,true))
+  candidatesList.addView(label("LazyCleaner nuk ka qasje në email-et private. Kontrollo Spam, Promotions dhe dërguesit e panjohur në aplikacionin tënd. Mos fshi automatikisht email-e vetëm sepse mungon emri i dërguesit.",13f))
+  action(candidatesList,"✉️","HAP GMAIL","Kontrollo Spam dhe Promotions"){
+   val intent=packageManager.getLaunchIntentForPackage("com.google.android.gm")
+   if(intent!=null)startActivity(intent)
+   else Toast.makeText(this,"Hap aplikacionin e emailit",Toast.LENGTH_LONG).show()
+  }
+ }
+ private fun showSecurityReview(){
+  candidatesList.removeAllViews()
+  candidatesList.addView(label("KONTROLL SIGURIE • ANDROID",19f,Color.CYAN,true))
+  candidatesList.addView(label("Ky është panel kontrolli sigurie, jo antivirus me motor skanimi. Për analizë malware përdor Google Play Protect. LazyCleaner nuk deklaron se telefoni është pa viruse pa kontroll real.",13f))
+  action(candidatesList,"🛡️","HAP GOOGLE PLAY PROTECT","Kontrollo aplikacionet për rreziqe"){
+   try{startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.gms")))}
+   catch(_:Exception){startActivity(Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS))}
+  }
+  action(candidatesList,"🔐","CILËSIMET E SIGURISË","Kontrollo përditësimet dhe mbrojtjen"){
+   startActivity(Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS))
+  }
+  action(candidatesList,"📦","SHIKO APLIKACIONET","Rishiko aplikacionet e instaluara"){showInstalledApps()}
  }
  private fun showTrashGuide(){
   candidatesList.removeAllViews()
