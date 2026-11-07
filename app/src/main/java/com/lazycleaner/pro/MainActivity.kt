@@ -19,6 +19,7 @@ class MainActivity : Activity() {
  private val deleteRequestCode = 202
  private val uninstallRequestCode = 203
  private val compressPickCode = 204
+ private val permanentDeleteCode = 205
  private val uninstallQueue=mutableListOf<String>()
  private var pendingUninstall:String?=null
  private val pendingTrash=mutableListOf<Uri>()
@@ -411,7 +412,7 @@ class MainActivity : Activity() {
      .setNegativeButton("Anulo",null).setPositiveButton("Vazhdo"){_,_->
       try{
        val request=android.provider.MediaStore.createDeleteRequest(contentResolver,chosen.take(100))
-       startIntentSenderForResult(request.intentSender,deleteRequestCode,null,0,0,0)
+       startIntentSenderForResult(request.intentSender,permanentDeleteCode,null,0,0,0)
       }catch(e:Exception){result.text="Fshirja nuk u nis: ${e.message}"}
      }.show()
    }
@@ -762,6 +763,12 @@ class MainActivity : Activity() {
    result.text=if(stillInstalled)"Aplikacioni $pkg është ende i instaluar." else "Çinstalimi i $pkg u verifikua."
    if(stillInstalled) uninstallQueue.clear()
    uninstallNext()
+   return
+  }
+  if(requestCode==permanentDeleteCode){
+   result.text=if(resultCode==RESULT_OK)
+    "Android miratoi kërkesën e fshirjes përfundimtare. Rifresko koshin dhe kontrollo hapësirën e lirë për verifikim."
+   else "Fshirja përfundimtare u anulua."
    return
   }
   if(requestCode==deleteRequestCode){
