@@ -46,6 +46,23 @@ class MainActivity : Activity() {
  private lateinit var container: LinearLayout
  private val phoneLanguage:String get()=resources.configuration.locales.get(0).language.lowercase(java.util.Locale.ROOT)
  private val translations=mapOf(
+   "KU ËSHTË KOSHI?" to listOf("WHERE IS THE TRASH?","WO IST DER PAPIERKORB?","DOV'È IL CESTINO?"),
+   "KOSHI I MEDIAS" to listOf("MEDIA TRASH","MEDIEN-PAPIERKORB","CESTINO MULTIMEDIALE"),
+   "SHKARKIMET E VJETRA" to listOf("OLD DOWNLOADS","ALTE DOWNLOADS","DOWNLOAD VECCHI"),
+   "VIDEO TË MËDHA" to listOf("LARGE VIDEOS","GROSSE VIDEOS","VIDEO GRANDI"),
+   "AUDIO TË VJETRA" to listOf("OLD AUDIO FILES","ALTE AUDIODATEIEN","AUDIO VECCHI"),
+   "PASTRIMI I CACHE" to listOf("CLEAR CACHE","CACHE BEREINIGEN","PULISCI CACHE"),
+   "EMAIL SPAM & REKLAMA" to listOf("EMAIL SPAM & ADS","E-MAIL-SPAM & WERBUNG","EMAIL SPAM E PUBBLICITÀ"),
+   "KONTROLL SIGURIE" to listOf("SECURITY CHECK","SICHERHEITSPRÜFUNG","CONTROLLO SICUREZZA"),
+   "Hap udhëzimet për koshin e Samsung" to listOf("Find Samsung trash locations","Samsung-Papierkorb finden","Trova i cestini Samsung"),
+   "Shiko dhe zbraz me konfirmim skedarët në koshin e Android" to listOf("Review and delete Android trashed files with approval","Android-Papierkorb mit Bestätigung leeren","Controlla ed elimina dal cestino Android con conferma"),
+   "Kontrollo Downloads dhe skedarët e mëdhenj" to listOf("Review downloads and large files","Downloads und große Dateien prüfen","Controlla download e file grandi"),
+   "Kontrollo videot e mëdha dhe të vjetra" to listOf("Review large and old videos","Große und alte Videos prüfen","Controlla video grandi e vecchi"),
+   "Kontrollo regjistrimet dhe audiot e vjetra" to listOf("Review recordings and old audio","Aufnahmen und alte Audiodateien prüfen","Controlla registrazioni e audio vecchi"),
+   "Pastro cache-in e LazyCleaner dhe hap cilësimet për aplikacionet e tjera" to listOf("Clear LazyCleaner cache and open other app settings","LazyCleaner-Cache löschen und App-Einstellungen öffnen","Pulisci cache LazyCleaner e apri impostazioni app"),
+   "Hap menaxhimin e spam-it në aplikacionin e emailit" to listOf("Open spam management in your email app","Spamverwaltung in E-Mail-App öffnen","Apri gestione spam nell'app email"),
+   "Kontrollo cilësimet e sigurisë dhe Play Protect" to listOf("Review security settings and Play Protect","Sicherheitseinstellungen und Play Protect prüfen","Controlla sicurezza e Play Protect"),
+   "Zgjidh aplikacionin për çinstalim" to listOf("Select apps to uninstall","Apps zum Deinstallieren auswählen","Seleziona app da disinstallare"),
    "GATI PËR SKANIM" to listOf("READY TO SCAN","BEREIT ZUM SCANNEN","PRONTO PER LA SCANSIONE"),
    "0 skedarë të analizuar" to listOf("0 files analyzed","0 Dateien analysiert","0 file analizzati"),
    "SKANO LIVE" to listOf("SCAN LIVE","LIVE SCANNEN","SCANSIONE LIVE"),
@@ -109,6 +126,30 @@ class MainActivity : Activity() {
   row.addView(content,LinearLayout.LayoutParams(0,-2,1f))
   row.addView(label("›",26f,Color.rgb(52,220,232)))
   parent.addView(row)
+ }
+ private fun premiumTile(parent:android.widget.GridLayout,icon:String,title:String,detail:String,click:()->Unit){
+  val tile=LinearLayout(this).apply{
+   orientation=LinearLayout.VERTICAL
+   gravity=android.view.Gravity.TOP
+   setPadding(dp(13),dp(13),dp(11),dp(12))
+   background=android.graphics.drawable.GradientDrawable().apply{
+    colors=intArrayOf(Color.rgb(24,61,102),Color.rgb(13,36,70))
+    orientation=android.graphics.drawable.GradientDrawable.Orientation.TL_BR
+    cornerRadius=dp(19).toFloat()
+    setStroke(dp(1),Color.rgb(55,116,151))
+   }
+   isClickable=true;isFocusable=true
+   foreground=android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(Color.argb(70,79,224,237)),null,null)
+   setOnClickListener{click()}
+  }
+  tile.addView(label(icon,30f),LinearLayout.LayoutParams(-1,dp(43)))
+  tile.addView(label(title,13f,Color.WHITE,true))
+  tile.addView(label(detail,11f,Color.rgb(172,204,226)))
+  val width=(resources.displayMetrics.widthPixels-dp(56))/2
+  parent.addView(tile,android.widget.GridLayout.LayoutParams().apply{
+   this.width=width;this.height=dp(154)
+   setMargins(dp(3),dp(3),dp(3),dp(7))
+  })
  }
  override fun onCreate(savedInstanceState: Bundle?) {
   super.onCreate(savedInstanceState)
@@ -186,48 +227,50 @@ class MainActivity : Activity() {
   val tools=card()
   tools.addView(label("MJETET E PASTRIMIT",13f,Color.rgb(65,224,226),true),
    LinearLayout.LayoutParams(-1,dp(35)))
-  action(tools,"📱","SKANO TELEFONIN","Skanon median pa zgjedhur dosje"){ startPhoneScan() }
-  action(tools,"🔍","Skano një dosje","Vetëm nën-dosje të lejuara nga Android"){
+  val toolGrid=android.widget.GridLayout(this).apply{columnCount=2}
+  tools.addView(toolGrid)
+  premiumTile(toolGrid,"📱","SKANO TELEFONIN","Skanon median pa zgjedhur dosje"){ startPhoneScan() }
+  premiumTile(toolGrid,"🔍","Skano një dosje","Vetëm nën-dosje të lejuara nga Android"){
    val i=Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
    startActivityForResult(i,pickerCode)
   }
-  action(tools,"🗑️","Zgjidh dhe fshi duplikatet","Shiko listën, selekto dhe konfirmo fshirjen"){ showCandidates() }
-  action(tools,"🧺","KU ËSHTË KOSHI?","Hap udhëzimet për koshin e Samsung"){showTrashGuide()}
-  action(tools,"📥","SHKARKIMET E VJETRA","Kontrollo Downloads dhe skedarët e mëdhenj"){showDownloadsGuide()}
-  action(tools,"🎬","VIDEO TË MËDHA","Kontrollo videot e mëdha dhe të vjetra"){showMediaReview(true)}
-  action(tools,"🎵","AUDIO TË VJETRA","Kontrollo regjistrimet dhe audiot e vjetra"){showMediaReview(false)}
-  action(tools,"🧽","PASTRIMI I CACHE","Pastro cache-in e LazyCleaner dhe hap cilësimet për aplikacionet e tjera"){showCacheCleanup()}
-  action(tools,"🗑️","KOSHI I MEDIAS","Shiko dhe zbraz me konfirmim skedarët në koshin e Android"){showMediaTrash()}
-  action(tools,"✉️","EMAIL SPAM & REKLAMA","Hap menaxhimin e spam-it në aplikacionin e emailit"){showEmailCleanup()}
-  action(tools,"🛡️","KONTROLL SIGURIE","Kontrollo cilësimet e sigurisë dhe Play Protect"){showSecurityReview()}
-  action(tools,"📸","Screenshot-et","Shiko fotografitë e ekranit për përzgjedhje"){ showScreenshots() }
-  action(tools,"🖼️","Kompreso fotografitë","Fotografi reale, pa screenshot-e; origjinalet ruhen"){ pickPhotosForCompression() }
-  action(tools,"🚀","Process Manager • RAM","Shiko RAM-in real dhe menaxho aplikacionet"){ showProcessManager() }
-  action(tools,"📦","Aplikacionet e instaluara","Zgjidh aplikacionin për çinstalim"){ showInstalledApps() }
-  action(tools,"🧾","Raporti i kandidatëve","Shiko listën pa fshirje"){
+  premiumTile(toolGrid,"🗑️","Zgjidh dhe fshi duplikatet","Shiko listën, selekto dhe konfirmo fshirjen"){ showCandidates() }
+  premiumTile(toolGrid,"🧺","KU ËSHTË KOSHI?","Hap udhëzimet për koshin e Samsung"){showTrashGuide()}
+  premiumTile(toolGrid,"📥","SHKARKIMET E VJETRA","Kontrollo Downloads dhe skedarët e mëdhenj"){showDownloadsGuide()}
+  premiumTile(toolGrid,"🎬","VIDEO TË MËDHA","Kontrollo videot e mëdha dhe të vjetra"){showMediaReview(true)}
+  premiumTile(toolGrid,"🎵","AUDIO TË VJETRA","Kontrollo regjistrimet dhe audiot e vjetra"){showMediaReview(false)}
+  premiumTile(toolGrid,"🧽","PASTRIMI I CACHE","Pastro cache-in e LazyCleaner dhe hap cilësimet për aplikacionet e tjera"){showCacheCleanup()}
+  premiumTile(toolGrid,"🗑️","KOSHI I MEDIAS","Shiko dhe zbraz me konfirmim skedarët në koshin e Android"){showMediaTrash()}
+  premiumTile(toolGrid,"✉️","EMAIL SPAM & REKLAMA","Hap menaxhimin e spam-it në aplikacionin e emailit"){showEmailCleanup()}
+  premiumTile(toolGrid,"🛡️","KONTROLL SIGURIE","Kontrollo cilësimet e sigurisë dhe Play Protect"){showSecurityReview()}
+  premiumTile(toolGrid,"📸","Screenshot-et","Shiko fotografitë e ekranit për përzgjedhje"){ showScreenshots() }
+  premiumTile(toolGrid,"🖼️","Kompreso fotografitë","Fotografi reale, pa screenshot-e; origjinalet ruhen"){ pickPhotosForCompression() }
+  premiumTile(toolGrid,"🚀","Process Manager • RAM","Shiko RAM-in real dhe menaxho aplikacionet"){ showProcessManager() }
+  premiumTile(toolGrid,"📦","Aplikacionet e instaluara","Zgjidh aplikacionin për çinstalim"){ showInstalledApps() }
+  premiumTile(toolGrid,"🧾","Raporti i kandidatëve","Shiko listën pa fshirje"){
    result.text=if(cleanupCandidates.isEmpty()) "Shtyp SKANO TELEFONIN për të analizuar median."
     else "Duplikate identike (skedarët e projekteve janë përjashtuar):\n"+cleanupCandidates.take(80).joinToString("\n") { "• "+it.second }+"\n\nAsnjë skedar nuk është fshirë."
   }
-  action(tools,"🛡️","Smart Backup","Kopjo një skedar në vend të sigurt"){
+  premiumTile(toolGrid,"🛡️","Smart Backup","Kopjo një skedar në vend të sigurt"){
    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
     addCategory(Intent.CATEGORY_OPENABLE);type="*/*";addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
    },backupPickCode)
   }
-  action(tools,"📄","Eksporto raportin","Ruaje analizën në format TXT"){
+  premiumTile(toolGrid,"📄","Eksporto raportin","Ruaje analizën në format TXT"){
    if(lastReport.isBlank()) Toast.makeText(this,"Së pari kryej një skanim",Toast.LENGTH_SHORT).show()
    else startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
     addCategory(Intent.CATEGORY_OPENABLE);type="text/plain";putExtra(Intent.EXTRA_TITLE,"LazyCleaner_Report.txt")
    },exportCode)
   }
-  action(tools,"📂","Dosja e fundit","Hap dosjen e skanuar"){
+  premiumTile(toolGrid,"📂","Dosja e fundit","Hap dosjen e skanuar"){
    val folder=latestScanFolder
    if(folder==null) Toast.makeText(this,"Së pari zgjidh një dosje",Toast.LENGTH_SHORT).show()
    else try { startActivity(Intent(Intent.ACTION_VIEW).apply {
     setDataAndType(folder,DocumentsContract.Document.MIME_TYPE_DIR);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
    }) } catch (_:Exception) { Toast.makeText(this,"Hape dosjen nga Files",Toast.LENGTH_LONG).show() }
   }
-  action(tools,"🕘","Historiku","Shiko skanimet e mëparshme"){
+  premiumTile(toolGrid,"🕘","Historiku","Shiko skanimet e mëparshme"){
    result.text=getSharedPreferences("scan_history",MODE_PRIVATE).getString("recent","Nuk ka skanime të përfunduara.")
   }
   container.addView(tools)
